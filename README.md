@@ -49,7 +49,16 @@ ISO15118 support is distributed accross multiple repositories and modules in EVe
 Dependencies
 ------------
 
-To build this library you need [everest-cmake](https://github.com/EVerest/everest-cmake) checkout in the same directory as libiso15118. If no `everest-cmake` is available, it is retrieved via FetchContent.
+This project uses [everest-cmake](https://github.com/EVerest/everest-cmake) and the [EVerest dependency manager](https://github.com/EVerest/everest-dependency-manager).
+
+- If `everest-cmake` is not available next to this repository, it is retrieved automatically via CMake's `FetchContent`.
+- The `edm` executable from the dependency manager is required when available. If `edm` is not found in `PATH`, the build now falls back to fetching the required libraries (`libcbv2g` and, when tests are enabled, `Catch2`) automatically via `FetchContent`, so a manual EDM installation is no longer required for a basic build.
+
+To install EDM manually (optional), follow the instructions in the dependency manager repository or install it directly from source, for example:
+
+```bash
+pip install --user git+https://github.com/EVerest/everest-dependency-manager
+```
 
 For Debian GNU/Linux 12 you will need the following dependencies:
 

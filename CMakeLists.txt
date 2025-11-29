@@ -30,6 +30,7 @@ endif()
 # options
 option(${PROJECT_NAME}_BUILD_TESTING "Build unit tests, used if included as dependency" OFF)
 option(BUILD_TESTING "Build unit tests, used if standalone project" OFF)
+option(DISABLE_EDM "Disable use of the EVerest dependency manager" OFF)
 option(OPT_AUTODOWNLOAD_ISO20_SCHEMAS "\
 Automatically download ISO15118-20 schemas.  Note: by setting this option to \
 true and hence downloading the schema files, YOU accept the ISO Customer \
@@ -48,11 +49,44 @@ endif()
 
 # dependencies
 if (NOT DISABLE_EDM)
+    find_program(EDM_EXECUTABLE edm)
+    if (NOT EDM_EXECUTABLE)
+        message(STATUS "EVerest dependency manager not found; disabling EDM support and fetching dependencies directly")
+        set(DISABLE_EDM ON)
+    endif()
+endif()
+
+if (NOT DISABLE_EDM)
     evc_setup_edm()
     # In EDM mode, we can't install exports (because the dependencies usually do not install their exports)
     set(ISO15118_INSTALL OFF)
 else()
-    find_package(cbv2g REQUIRED)
+    include(FetchContent)
+
+    find_package(cbv2g QUIET)
+    if (NOT cbv2g_FOUND)
+        message(STATUS "Retrieving libcbv2g using FetchContent")
+        FetchContent_Declare(
+            libcbv2g
+            GIT_REPOSITORY https://github.com/EVerest/libcbv2g.git
+            GIT_TAG        v0.3.1
+        )
+        FetchContent_MakeAvailable(libcbv2g)
+    endif()
+endif()
+
+if (ISO15118_BUILD_TESTING)
+    include(FetchContent)
+    find_package(Catch2 3 CONFIG QUIET)
+    if (NOT Catch2_FOUND)
+        message(STATUS "Retrieving Catch2 using FetchContent")
+        FetchContent_Declare(
+            Catch2
+            GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+            GIT_TAG        v3.10.0
+        )
+        FetchContent_MakeAvailable(Catch2)
+    endif()
 endif()
 
 add_subdirectory(input)
