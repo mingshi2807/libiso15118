@@ -2,7 +2,6 @@
 // Copyright 2023 Pionix GmbH and Contributors to EVerest
 #pragma once
 
-#include <list>
 #include <memory>
 #include <optional>
 #include <string>

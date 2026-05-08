@@ -17,6 +17,7 @@ namespace iso15118 {
 
 static constexpr auto SESSION_IDLE_TIMEOUT_MS = 5000;
 
+// Log a raw V2GTP payload for debugging (hex-escaped).
 static void log_sdp_packet(const iso15118::io::SdpPacket& sdp) {
     static constexpr auto ESCAPED_BYTE_CHAR_COUNT = 4;
     auto payload_string_buffer = std::make_unique<char[]>(sdp.get_payload_length() * ESCAPED_BYTE_CHAR_COUNT + 1);
@@ -29,16 +30,19 @@ static void log_sdp_packet(const iso15118::io::SdpPacket& sdp) {
                         payload_string_buffer.get());
 }
 
+// Emit a decoded EXI payload into the session log callback.
 static void log_packet_from_car(const iso15118::io::SdpPacket& packet, session::SessionLogger& logger) {
     logger.exi(static_cast<uint16_t>(packet.get_payload_type()), packet.get_payload_buffer(),
                packet.get_payload_length(), session::logging::ExiMessageDirection::FROM_EV);
 }
 
+// Decode the V2GTP payload into a message variant (SAP / ISO20 main / AC / DC).
 static std::unique_ptr<message_20::Variant> make_variant_from_packet(const iso15118::io::SdpPacket& packet) {
     return std::make_unique<message_20::Variant>(
         packet.get_payload_type(), io::StreamInputView{packet.get_payload_buffer(), packet.get_payload_length()});
 }
 
+// Turn an SDP parsing error into a readable exception.
 void raise_invalid_packet_state(const io::SdpPacket& sdp_packet) {
     using PacketState = io::SdpPacket::State;
 
@@ -105,6 +109,7 @@ bool read_single_sdp_packet(io::IConnection& connection, io::SdpPacket& sdp_pack
     return false;
 }
 
+// Write a V2GTP response header into the response buffer and return total bytes to send.
 static size_t setup_response_header(uint8_t* buffer, iso15118::io::v2gtp::PayloadType payload_type, size_t size) {
     buffer[0] = iso15118::io::SDP_PROTOCOL_VERSION;
     buffer[1] = iso15118::io::SDP_INVERSE_PROTOCOL_VERSION;
@@ -142,7 +147,7 @@ TimePoint const& Session::poll() {
     const auto now = get_current_time_point();
 
     if (not state.connected) {
-        // nothing happened so far, just return
+        // No active transport connection yet; just schedule a future wakeup.
         next_session_event = offset_time_point_by_ms(now, SESSION_IDLE_TIMEOUT_MS);
         return next_session_event;
     }
@@ -261,6 +266,7 @@ void Session::handle_connection_event(io::ConnectionEvent event) {
     case Event::ACCEPTED:
         assert(state.connected == false);
         state.connected = true;
+        // Public endpoint is available after accept.
         log("Accepted connection on port %d", connection->get_public_endpoint().port);
         return;
 

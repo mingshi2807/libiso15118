@@ -25,25 +25,37 @@
 
 namespace iso15118 {
 
+// Lightweight session runtime state flags used by Session::poll().
 struct SessionState {
     bool connected{false};
     bool new_data{false};
     bool fsm_needs_call{false};
 };
 
+// ISO 15118-20 EVSE session driver.
+// Owns the transport connection, protocol context, and state machine.
+// Typical usage: construct with a connection + SessionConfig + callbacks,
+// then call poll() periodically from an event loop.
 class Session {
 public:
+    // connection: transport (plain TCP or TLS) used for V2GTP payloads
+    // session_config: EVSE capabilities and limits (derived from EvseSetupConfig)
+    // callbacks: feedback hooks for external integration
+    // pause_ctx: optional persisted pause context for session resume
     Session(std::unique_ptr<io::IConnection>, d20::SessionConfig, const session::feedback::Callbacks&,
             std::optional<d20::PauseContext>&);
     ~Session();
 
+    // Advance IO + state machine work; returns the next desired wakeup time.
     TimePoint const& poll();
+    // Inject control events (e.g., updated limits or mode parameters).
     void push_control_event(const d20::ControlEvent&);
 
     bool is_finished() const {
         return (ctx.session_stopped or ctx.session_paused);
     }
 
+    // Force-close the connection and terminate the session.
     void close();
 
 private:
@@ -72,6 +84,7 @@ private:
 
     d20::Timeouts timeouts;
 
+    // Receives low-level connection events (accept/open/data/close).
     void handle_connection_event(io::ConnectionEvent event);
 };
 
