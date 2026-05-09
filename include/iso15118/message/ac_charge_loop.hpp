@@ -108,6 +108,7 @@ struct DSOCosPhiSetpoint {
     RationalNumber value;
     std::optional<RationalNumber> value_L2;
     std::optional<RationalNumber> value_L3;
+    DERPowerFactorExcitation excitation;
     bool pt1_response_reactive_power;
     RationalNumber step_response_time_constant_reactive_power;
 };

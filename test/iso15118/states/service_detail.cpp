@@ -161,10 +161,6 @@ SCENARIO("Service detail state handling") {
         session.offered_services.energy_services = {dt::ServiceCategory::AC_DER};
 
         auto session_config = d20::SessionConfig(evse_setup);
-        session_config.ac_der_parameter_list[0].control_functions.volt_watt = true;
-        session_config.ac_der_parameter_list[0].control_functions.dso_q_setpoint_provision = true;
-        session_config.ac_der_parameter_list[0].control_functions.dso_cos_phi_setpoint_provision = true;
-        session_config.ac_der_parameter_list[0].control_functions.dc_injection_restriction = true;
 
         message_20::ServiceDetailRequest req;
         req.header.session_id = session.get_id();
@@ -191,6 +187,20 @@ SCENARIO("Service detail state handling") {
             REQUIRE(std::get<bool>(parameters.parameter[12].value));
             REQUIRE(parameters.parameter[13].name == "DCInjectionRestriction");
             REQUIRE(std::get<bool>(parameters.parameter[13].value));
+            REQUIRE(parameters.parameter[14].name == "UnderFrequencyWatt");
+            REQUIRE(std::get<bool>(parameters.parameter[14].value));
+            REQUIRE(parameters.parameter[15].name == "OverFrequencyWatt");
+            REQUIRE(std::get<bool>(parameters.parameter[15].value));
+            REQUIRE(parameters.parameter[16].name == "VoltVar");
+            REQUIRE(std::get<bool>(parameters.parameter[16].value));
+            REQUIRE(parameters.parameter[17].name == "WattVar");
+            REQUIRE(std::get<bool>(parameters.parameter[17].value));
+            REQUIRE(parameters.parameter[18].name == "WattCosphi");
+            REQUIRE(std::get<bool>(parameters.parameter[18].value));
+            REQUIRE(parameters.parameter[19].name == "OverVoltageFaultRideThroughMode");
+            REQUIRE(std::get<bool>(parameters.parameter[19].value));
+            REQUIRE(parameters.parameter[21].name == "ZeroCurrentMode");
+            REQUIRE(std::get<bool>(parameters.parameter[21].value));
         }
     }
 

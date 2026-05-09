@@ -24,6 +24,24 @@ using Dynamic_AC_Res = dt::Dynamic_AC_CLResControlMode;
 using Dynamic_BPT_AC_Res = dt::BPT_Dynamic_AC_CLResControlMode;
 using Dynamic_DER_AC_Res = dt::DER_Dynamic_AC_CLResControlMode;
 
+namespace {
+dt::DERControlFunctions get_mandatory_der_control_functions() {
+    dt::DERControlFunctions der_control_functions;
+    der_control_functions.volt_watt = true;
+    der_control_functions.dso_q_setpoint_provision = true;
+    der_control_functions.dso_cos_phi_setpoint_provision = true;
+    der_control_functions.dc_injection_restriction = true;
+    der_control_functions.under_frequency_watt = true;
+    der_control_functions.over_frequency_watt = true;
+    der_control_functions.volt_var = true;
+    der_control_functions.watt_var = true;
+    der_control_functions.watt_cos_phi = true;
+    der_control_functions.over_voltage_fault_ride_through = true;
+    der_control_functions.zero_current = true;
+    return der_control_functions;
+}
+} // namespace
+
 SCENARIO("AC charge loop state handling") {
 
     const auto evse_id = std::string("everest se");
@@ -295,10 +313,7 @@ SCENARIO("AC charge loop state handling") {
     }
 
     GIVEN("Good case - AC_DER dynamic mode") {
-        dt::DERControlFunctions der_control_functions;
-        der_control_functions.volt_watt = true;
-        der_control_functions.dso_q_setpoint_provision = true;
-        der_control_functions.dso_cos_phi_setpoint_provision = true;
+        const auto der_control_functions = get_mandatory_der_control_functions();
 
         d20::SelectedServiceParameters service_parameters = d20::SelectedServiceParameters(
             dt::ServiceCategory::AC_DER, dt::AcConnector::ThreePhase, dt::ControlMode::Dynamic,
@@ -329,6 +344,7 @@ SCENARIO("AC charge loop state handling") {
 
         auto ac_target_power = d20::AcTargetPower{};
         ac_target_power.target_active_power = {11, 3};
+        ac_target_power.target_reactive_power = {2, 3};
         auto ac_present_power = d20::AcPresentPower{};
         ac_present_power.present_active_power = {11, 3};
 
@@ -343,6 +359,35 @@ SCENARIO("AC charge loop state handling") {
             REQUIRE(dt::from_RationalNumber(res_control_mode.target_active_power) == 11000.0f);
             REQUIRE(dt::from_RationalNumber(res_control_mode.max_charge_power) == 22000.0f);
             REQUIRE(dt::from_RationalNumber(res_control_mode.max_discharge_power) == 11000.0f);
+            REQUIRE(res_control_mode.dso_q_setpoint.has_value());
+            REQUIRE(dt::from_RationalNumber(res_control_mode.dso_q_setpoint->value) == 2000.0f);
+            REQUIRE(res_control_mode.dso_cos_phi_setpoint.has_value());
+            REQUIRE(res_control_mode.dso_cos_phi_setpoint->excitation == dt::DERPowerFactorExcitation::OverExcited);
+        }
+    }
+
+    GIVEN("Bad case - AC_DER dynamic mode with incomplete mandatory controls") {
+        dt::DERControlFunctions der_control_functions;
+        der_control_functions.volt_watt = true;
+
+        d20::SelectedServiceParameters service_parameters = d20::SelectedServiceParameters(
+            dt::ServiceCategory::AC_DER, dt::AcConnector::ThreePhase, dt::ControlMode::Dynamic,
+            dt::MobilityNeedsMode::ProvidedByEvcc, dt::Pricing::NoPricing, dt::BptChannel::Unified,
+            dt::GeneratorMode::GridFollowing, 230, dt::GridCodeIslandingDetectionMethod::Passive,
+            der_control_functions);
+
+        d20::Session session = d20::Session(service_parameters);
+        message_20::AC_ChargeLoopRequest req;
+        req.header.session_id = session.get_id();
+        req.header.timestamp = 1691411798;
+        req.control_mode.emplace<Dynamic_DER_AC_Req>();
+        req.meter_info_requested = false;
+
+        const auto res = d20::state::handle_request(req, session, false, false, 50, ac_limits, d20::AcTargetPower{},
+                                                    d20::AcPresentPower{}, d20::UpdateDynamicModeParameters());
+
+        THEN("ResponseCode: FAILED") {
+            REQUIRE(res.response_code == dt::ResponseCode::FAILED);
         }
     }
 

@@ -16,6 +16,24 @@ using AC_ModeRes = dt::AC_CPDResEnergyTransferMode;
 using BPT_AC_ModeRes = dt::BPT_AC_CPDResEnergyTransferMode;
 using DER_AC_ModeRes = dt::DER_AC_CPDResEnergyTransferMode;
 
+namespace {
+dt::DERControlFunctions get_mandatory_der_control_functions() {
+    dt::DERControlFunctions der_control_functions;
+    der_control_functions.volt_watt = true;
+    der_control_functions.dso_q_setpoint_provision = true;
+    der_control_functions.dso_cos_phi_setpoint_provision = true;
+    der_control_functions.dc_injection_restriction = true;
+    der_control_functions.under_frequency_watt = true;
+    der_control_functions.over_frequency_watt = true;
+    der_control_functions.volt_var = true;
+    der_control_functions.watt_var = true;
+    der_control_functions.watt_cos_phi = true;
+    der_control_functions.over_voltage_fault_ride_through = true;
+    der_control_functions.zero_current = true;
+    return der_control_functions;
+}
+} // namespace
+
 SCENARIO("AC charge parameter discovery state handling") {
     GIVEN("Bad Case - Unknown session") {
 
@@ -282,9 +300,7 @@ SCENARIO("AC charge parameter discovery state handling") {
     }
 
     GIVEN("Good Case: AC_DER") {
-        dt::DERControlFunctions der_control_functions;
-        der_control_functions.volt_watt = true;
-        der_control_functions.dso_q_setpoint_provision = true;
+        const auto der_control_functions = get_mandatory_der_control_functions();
 
         const auto service_parameters = d20::SelectedServiceParameters(
             dt::ServiceCategory::AC_DER, dt::AcConnector::ThreePhase, dt::ControlMode::Dynamic,
@@ -325,6 +341,45 @@ SCENARIO("AC charge parameter discovery state handling") {
             REQUIRE(transfer_mode.operating_mode == dt::EVOperatingMode::GridFollowing);
             REQUIRE(transfer_mode.grid_connection_mode == dt::GridConnectionMode::GridConnected);
             REQUIRE(transfer_mode.der_control.maximum_level_dc_injection.has_value());
+            REQUIRE(transfer_mode.der_control.active_power_support.has_value());
+            REQUIRE(transfer_mode.der_control.active_power_support->volt_watt.has_value());
+            REQUIRE(transfer_mode.der_control.active_power_support->under_frequency_watt.has_value());
+            REQUIRE(transfer_mode.der_control.active_power_support->over_frequency_watt.has_value());
+            REQUIRE(transfer_mode.der_control.reactive_power_support.has_value());
+            REQUIRE(transfer_mode.der_control.reactive_power_support->volt_var.has_value());
+            REQUIRE(transfer_mode.der_control.reactive_power_support->watt_var.has_value());
+            REQUIRE(transfer_mode.der_control.reactive_power_support->watt_cos_phi.has_value());
+            REQUIRE(transfer_mode.der_control.overvoltage_fault_ride_through.has_value());
+            REQUIRE(transfer_mode.der_control.zero_current.has_value());
+        }
+    }
+
+    GIVEN("Bad Case: AC_DER selected with incomplete mandatory controls") {
+        dt::DERControlFunctions der_control_functions;
+        der_control_functions.volt_watt = true;
+
+        const auto service_parameters = d20::SelectedServiceParameters(
+            dt::ServiceCategory::AC_DER, dt::AcConnector::ThreePhase, dt::ControlMode::Dynamic,
+            dt::MobilityNeedsMode::ProvidedByEvcc, dt::Pricing::NoPricing, dt::BptChannel::Unified,
+            dt::GeneratorMode::GridFollowing, 230, dt::GridCodeIslandingDetectionMethod::Passive,
+            der_control_functions);
+
+        auto session = d20::Session(service_parameters);
+
+        auto limits = d20::AcTransferLimits{};
+        limits.charge_power.max = dt::from_float(11000.0f);
+        limits.charge_power.min = dt::from_float(1000.0f);
+        limits.nominal_frequency = dt::from_float(50.0f);
+
+        message_20::AC_ChargeParameterDiscoveryRequest req;
+        req.header.session_id = session.get_id();
+        req.header.timestamp = 1691411798;
+        req.transfer_mode.emplace<DER_AC_ModeReq>();
+
+        const auto res = d20::state::handle_request(req, session, limits, iso15118::d20::AcPresentPower{});
+
+        THEN("ResponseCode: FAILED_WrongChargeParameter") {
+            REQUIRE(res.response_code == dt::ResponseCode::FAILED_WrongChargeParameter);
         }
     }
 

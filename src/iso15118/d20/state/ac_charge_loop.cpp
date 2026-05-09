@@ -103,6 +103,36 @@ void fill_der_power_limits(Dynamic_DER_AC_Res& out, const d20::AcTransferLimits&
     }
 }
 
+bool has_mandatory_ac_der_controls(const dt::DERControlFunctions& controls) {
+    return controls.volt_watt and controls.dso_q_setpoint_provision and controls.dso_cos_phi_setpoint_provision and
+           controls.dc_injection_restriction and controls.under_frequency_watt and controls.over_frequency_watt and
+           controls.volt_var and controls.watt_var and controls.watt_cos_phi and
+           controls.over_voltage_fault_ride_through and controls.zero_current;
+}
+
+dt::DSOQSetpoint make_dso_q_setpoint(const AcTargetPower& target_powers) {
+    const auto zero = dt::RationalNumber{0, 0};
+    return {target_powers.target_reactive_power.value_or(zero), target_powers.target_reactive_power_L2,
+            target_powers.target_reactive_power_L3, false, zero};
+}
+
+dt::DSOCosPhiSetpoint make_dso_cos_phi_setpoint() {
+    const auto zero = dt::RationalNumber{0, 0};
+    return {dt::RationalNumber{1, 0}, std::nullopt, std::nullopt, dt::DERPowerFactorExcitation::OverExcited, false,
+            zero};
+}
+
+template <typename Res>
+void fill_der_control_setpoints(Res& out, const AcTargetPower& target_powers,
+                                const dt::DERControlFunctions& controls) {
+    if (controls.dso_q_setpoint_provision) {
+        out.dso_q_setpoint = make_dso_q_setpoint(target_powers);
+    }
+    if (controls.dso_cos_phi_setpoint_provision) {
+        out.dso_cos_phi_setpoint = make_dso_cos_phi_setpoint();
+    }
+}
+
 // TODO(sl): Refactor with DcChargeLoop state
 namespace {
 template <typename T>
@@ -136,6 +166,7 @@ message_20::AC_ChargeLoopResponse handle_request(const message_20::AC_ChargeLoop
     const auto selected_control_mode = selected_services.selected_control_mode;
     const auto selected_energy_service = selected_services.selected_energy_service;
     const auto selected_mobility_needs_mode = selected_services.selected_mobility_needs_mode;
+    const auto selected_der_controls = selected_services.selected_der_control_functions;
 
     if (std::holds_alternative<Scheduled_AC_Req>(req.control_mode)) {
 
@@ -166,10 +197,15 @@ message_20::AC_ChargeLoopResponse handle_request(const message_20::AC_ChargeLoop
             selected_energy_service != dt::ServiceCategory::AC_DER) {
             return response_with_code(res, dt::ResponseCode::FAILED);
         }
+        if (not selected_der_controls.has_value() or
+            not has_mandatory_ac_der_controls(selected_der_controls.value())) {
+            return response_with_code(res, dt::ResponseCode::FAILED);
+        }
 
         auto& res_mode = res.control_mode.emplace<Scheduled_DER_AC_Res>();
         convert(static_cast<Scheduled_AC_Res&>(res_mode), target_powers, present_powers);
         fill_der_power_limits(res_mode, ac_limits);
+        fill_der_control_setpoints(res_mode, target_powers, selected_der_controls.value());
 
     } else if (std::holds_alternative<Dynamic_AC_Req>(req.control_mode)) {
 
@@ -206,10 +242,15 @@ message_20::AC_ChargeLoopResponse handle_request(const message_20::AC_ChargeLoop
         if (selected_control_mode != dt::ControlMode::Dynamic or selected_energy_service != dt::ServiceCategory::AC_DER) {
             return response_with_code(res, dt::ResponseCode::FAILED);
         }
+        if (not selected_der_controls.has_value() or
+            not has_mandatory_ac_der_controls(selected_der_controls.value())) {
+            return response_with_code(res, dt::ResponseCode::FAILED);
+        }
 
         auto& res_mode = res.control_mode.emplace<Dynamic_DER_AC_Res>();
         convert(static_cast<Dynamic_AC_Res&>(res_mode), target_powers, present_powers);
         fill_der_power_limits(res_mode, ac_limits);
+        fill_der_control_setpoints(res_mode, target_powers, selected_der_controls.value());
 
         if (selected_mobility_needs_mode == dt::MobilityNeedsMode::ProvidedBySecc) {
             set_dynamic_parameters_in_res(res_mode, dynamic_parameters, res.header.timestamp);

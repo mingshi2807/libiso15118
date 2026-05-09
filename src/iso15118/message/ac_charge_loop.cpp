@@ -284,6 +284,7 @@ template <> void convert(const iso20_ac_DSOCosPhiSetpointType& in, datatypes::DS
     convert(in.DSOCosPhiSetpointValue, out.value);
     CB2CPP_CONVERT_IF_USED(in.DSOCosPhiSetpointValue_L2, out.value_L2);
     CB2CPP_CONVERT_IF_USED(in.DSOCosPhiSetpointValue_L3, out.value_L3);
+    cb_convert_enum(in.Excitation, out.excitation);
     out.pt1_response_reactive_power = in.PT1ResponseReactivePower;
     convert(in.StepResponseTimeConstantReactivePower, out.step_response_time_constant_reactive_power);
 }
@@ -428,6 +429,7 @@ template <> void convert(const datatypes::DSOCosPhiSetpoint& in, iso20_ac_DSOCos
     convert(in.value, out.DSOCosPhiSetpointValue);
     CPP2CB_CONVERT_IF_USED(in.value_L2, out.DSOCosPhiSetpointValue_L2);
     CPP2CB_CONVERT_IF_USED(in.value_L3, out.DSOCosPhiSetpointValue_L3);
+    cb_convert_enum(in.excitation, out.Excitation);
     out.PT1ResponseReactivePower = in.pt1_response_reactive_power;
     convert(in.step_response_time_constant_reactive_power, out.StepResponseTimeConstantReactivePower);
 }
