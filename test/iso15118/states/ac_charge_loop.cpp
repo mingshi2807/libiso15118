@@ -6,6 +6,9 @@
 
 #include <iso15118/d20/config.hpp>
 
+#include <memory>
+#include <utility>
+
 using namespace iso15118;
 
 namespace dt = message_20::datatypes;
@@ -40,6 +43,32 @@ dt::DERControlFunctions get_mandatory_der_control_functions() {
     der_control_functions.zero_current = true;
     return der_control_functions;
 }
+
+class RecordingAcDerControlProvider : public d20::IAcDerControlProvider {
+public:
+    explicit RecordingAcDerControlProvider(d20::AcDerControlConfig config_) : config(std::move(config_)) {
+    }
+
+    std::optional<d20::AcDerControlConfig>
+    get_ac_der_control_config(const d20::AcDerControlContext& context) const override {
+        calls++;
+        last_context = context;
+        return config;
+    }
+
+    d20::AcDerControlConfig config;
+    mutable int calls{0};
+    mutable std::optional<d20::AcDerControlContext> last_context;
+};
+
+class UnavailableAcDerControlProvider : public d20::IAcDerControlProvider {
+public:
+    std::optional<d20::AcDerControlConfig>
+    get_ac_der_control_config(const d20::AcDerControlContext& context) const override {
+        (void)context;
+        return std::nullopt;
+    }
+};
 } // namespace
 
 SCENARIO("AC charge loop state handling") {
@@ -251,12 +280,14 @@ SCENARIO("AC charge loop state handling") {
         ac_target_power.target_active_power = {11, 3};
         auto ac_present_power = d20::AcPresentPower{};
         ac_present_power.present_active_power = {11, 3};
+        RecordingAcDerControlProvider der_provider(d20::make_default_ac_der_control_config());
 
-        const auto res = d20::state::handle_request(req, session, false, false, 50, ac_target_power, ac_present_power,
-                                                    d20::UpdateDynamicModeParameters());
+        const auto res = d20::state::handle_request(req, session, false, false, 50, ac_limits, ac_target_power,
+                                                    ac_present_power, d20::UpdateDynamicModeParameters(), der_provider);
 
         THEN("ResponseCode: OK, mandatory fields should be set") {
             REQUIRE(res.response_code == dt::ResponseCode::OK);
+            REQUIRE(der_provider.calls == 0);
             REQUIRE(res.status.has_value() == false);
             REQUIRE(res.meter_info.has_value() == false);
             REQUIRE(res.receipt.has_value() == false);
@@ -351,14 +382,22 @@ SCENARIO("AC charge loop state handling") {
         ac_der_control_config.dso_q_setpoint.value = {7, 2};
         ac_der_control_config.dso_cos_phi_setpoint.value = {95, -2};
         ac_der_control_config.dso_cos_phi_setpoint.excitation = dt::DERPowerFactorExcitation::UnderExcited;
-        const auto ac_der_control_provider = d20::make_static_ac_der_control_provider(ac_der_control_config);
+        auto ac_der_control_provider = std::make_shared<RecordingAcDerControlProvider>(ac_der_control_config);
+        auto evse_setup_with_provider = evse_setup;
+        evse_setup_with_provider.supported_energy_services = {dt::ServiceCategory::AC_DER};
+        evse_setup_with_provider.ac_der_control_provider = ac_der_control_provider;
+        const auto session_config = d20::SessionConfig(evse_setup_with_provider);
 
         const auto res =
             d20::state::handle_request(req, session, false, false, 50, ac_limits, ac_target_power, ac_present_power,
-                                       d20::UpdateDynamicModeParameters(), *ac_der_control_provider);
+                                       d20::UpdateDynamicModeParameters(), *session_config.ac_der_control_provider);
 
         THEN("ResponseCode: OK and DER control mode should be selected") {
             REQUIRE(res.response_code == dt::ResponseCode::OK);
+            REQUIRE(ac_der_control_provider->calls == 1);
+            REQUIRE(ac_der_control_provider->last_context.has_value());
+            REQUIRE(ac_der_control_provider->last_context->selected_energy_service == dt::ServiceCategory::AC_DER);
+            REQUIRE(ac_der_control_provider->last_context->selected_control_mode == dt::ControlMode::Dynamic);
             REQUIRE(std::holds_alternative<Dynamic_DER_AC_Res>(res.control_mode));
 
             const auto& res_control_mode = std::get<Dynamic_DER_AC_Res>(res.control_mode);
@@ -370,6 +409,30 @@ SCENARIO("AC charge loop state handling") {
             REQUIRE(res_control_mode.dso_cos_phi_setpoint.has_value());
             REQUIRE(dt::from_RationalNumber(res_control_mode.dso_cos_phi_setpoint->value) == 0.95f);
             REQUIRE(res_control_mode.dso_cos_phi_setpoint->excitation == dt::DERPowerFactorExcitation::UnderExcited);
+        }
+    }
+
+    GIVEN("Bad case - AC_DER dynamic mode but application provider has no AC DER config") {
+        d20::SelectedServiceParameters service_parameters = d20::SelectedServiceParameters(
+            dt::ServiceCategory::AC_DER, dt::AcConnector::ThreePhase, dt::ControlMode::Dynamic,
+            dt::MobilityNeedsMode::ProvidedByEvcc, dt::Pricing::NoPricing, dt::BptChannel::Unified,
+            dt::GeneratorMode::GridFollowing, 230, dt::GridCodeIslandingDetectionMethod::Passive,
+            get_mandatory_der_control_functions());
+
+        d20::Session session = d20::Session(service_parameters);
+        message_20::AC_ChargeLoopRequest req;
+        req.header.session_id = session.get_id();
+        req.header.timestamp = 1691411798;
+        req.control_mode.emplace<Dynamic_DER_AC_Req>();
+        req.meter_info_requested = false;
+
+        const UnavailableAcDerControlProvider provider;
+        const auto res =
+            d20::state::handle_request(req, session, false, false, 50, ac_limits, d20::AcTargetPower{},
+                                       d20::AcPresentPower{}, d20::UpdateDynamicModeParameters(), provider);
+
+        THEN("ResponseCode: FAILED") {
+            REQUIRE(res.response_code == dt::ResponseCode::FAILED);
         }
     }
 
