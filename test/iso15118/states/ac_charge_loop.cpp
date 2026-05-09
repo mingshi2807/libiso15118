@@ -351,10 +351,11 @@ SCENARIO("AC charge loop state handling") {
         ac_der_control_config.dso_q_setpoint.value = {7, 2};
         ac_der_control_config.dso_cos_phi_setpoint.value = {95, -2};
         ac_der_control_config.dso_cos_phi_setpoint.excitation = dt::DERPowerFactorExcitation::UnderExcited;
+        const auto ac_der_control_provider = d20::make_static_ac_der_control_provider(ac_der_control_config);
 
-        const auto res = d20::state::handle_request(req, session, false, false, 50, ac_limits, ac_target_power,
-                                                    ac_present_power, d20::UpdateDynamicModeParameters(),
-                                                    ac_der_control_config);
+        const auto res =
+            d20::state::handle_request(req, session, false, false, 50, ac_limits, ac_target_power, ac_present_power,
+                                       d20::UpdateDynamicModeParameters(), *ac_der_control_provider);
 
         THEN("ResponseCode: OK and DER control mode should be selected") {
             REQUIRE(res.response_code == dt::ResponseCode::OK);

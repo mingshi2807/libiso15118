@@ -136,7 +136,7 @@ void convert(DER_AC_ModeRes& out, const d20::AcTransferLimits& limits, const d20
 message_20::AC_ChargeParameterDiscoveryResponse
 handle_request(const message_20::AC_ChargeParameterDiscoveryRequest& req, const d20::Session& session,
                const d20::AcTransferLimits& limits, const d20::AcPresentPower& powers,
-               const d20::AcDerControlConfig& ac_der_control_config) {
+               const d20::IAcDerControlProvider& ac_der_control_provider) {
 
     message_20::AC_ChargeParameterDiscoveryResponse res;
 
@@ -146,6 +146,9 @@ handle_request(const message_20::AC_ChargeParameterDiscoveryRequest& req, const 
 
     const auto selected_services = session.get_selected_services();
     const auto selected_energy_service = selected_services.selected_energy_service;
+    const auto provider_context = AcDerControlContext{selected_energy_service, selected_services.selected_control_mode,
+                                                      selected_services.selected_mobility_needs_mode,
+                                                      selected_services.selected_der_control_functions};
 
     if (std::holds_alternative<AC_ModeReq>(req.transfer_mode)) {
         if (selected_energy_service != message_20::datatypes::ServiceCategory::AC) {
@@ -171,14 +174,15 @@ handle_request(const message_20::AC_ChargeParameterDiscoveryRequest& req, const 
             return response_with_code(res, message_20::datatypes::ResponseCode::FAILED_WrongChargeParameter);
         }
         const auto& controls = selected_services.selected_der_control_functions.value();
-        if (not has_mandatory_ac_der_controls(controls) or
-            not has_configured_ac_der_controls(controls, ac_der_control_config)) {
+        const auto ac_der_control_config = ac_der_control_provider.get_ac_der_control_config(provider_context);
+        if (not ac_der_control_config.has_value() or not has_mandatory_ac_der_controls(controls) or
+            not has_configured_ac_der_controls(controls, ac_der_control_config.value())) {
             return response_with_code(res, message_20::datatypes::ResponseCode::FAILED_WrongChargeParameter);
         }
 
         auto& mode = res.transfer_mode.emplace<DER_AC_ModeRes>();
         convert(mode, limits, powers);
-        mode.der_control = ac_der_control_config.cpd_control;
+        mode.der_control = ac_der_control_config->cpd_control;
 
     } else {
         return response_with_code(res, message_20::datatypes::ResponseCode::FAILED_WrongChargeParameter);
@@ -189,8 +193,16 @@ handle_request(const message_20::AC_ChargeParameterDiscoveryRequest& req, const 
 
 message_20::AC_ChargeParameterDiscoveryResponse
 handle_request(const message_20::AC_ChargeParameterDiscoveryRequest& req, const d20::Session& session,
+               const d20::AcTransferLimits& limits, const d20::AcPresentPower& powers,
+               const d20::AcDerControlConfig& ac_der_control_config) {
+    return handle_request(req, session, limits, powers, *make_static_ac_der_control_provider(ac_der_control_config));
+}
+
+message_20::AC_ChargeParameterDiscoveryResponse
+handle_request(const message_20::AC_ChargeParameterDiscoveryRequest& req, const d20::Session& session,
                const d20::AcTransferLimits& limits, const d20::AcPresentPower& powers) {
-    return handle_request(req, session, limits, powers, make_default_ac_der_control_config());
+    return handle_request(req, session, limits, powers,
+                          *make_static_ac_der_control_provider(make_default_ac_der_control_config()));
 }
 
 void AC_ChargeParameterDiscovery::enter() {
@@ -227,7 +239,7 @@ Result AC_ChargeParameterDiscovery::feed(Event ev) {
         }
 
         const auto res = handle_request(*req, m_ctx.session, m_ctx.session_config.ac_limits, present_powers,
-                                        m_ctx.session_config.ac_der_control_config);
+                                        *m_ctx.session_config.ac_der_control_provider);
 
         m_ctx.respond(res);
 

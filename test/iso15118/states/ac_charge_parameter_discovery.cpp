@@ -4,6 +4,8 @@
 
 #include <iso15118/detail/d20/state/ac_charge_parameter_discovery.hpp>
 
+#include <utility>
+
 using namespace iso15118;
 
 namespace dt = message_20::datatypes;
@@ -32,6 +34,32 @@ dt::DERControlFunctions get_mandatory_der_control_functions() {
     der_control_functions.zero_current = true;
     return der_control_functions;
 }
+
+class RecordingAcDerControlProvider : public d20::IAcDerControlProvider {
+public:
+    explicit RecordingAcDerControlProvider(d20::AcDerControlConfig config_) : config(std::move(config_)) {
+    }
+
+    std::optional<d20::AcDerControlConfig>
+    get_ac_der_control_config(const d20::AcDerControlContext& context) const override {
+        calls++;
+        last_context = context;
+        return config;
+    }
+
+    d20::AcDerControlConfig config;
+    mutable int calls{0};
+    mutable std::optional<d20::AcDerControlContext> last_context;
+};
+
+class UnavailableAcDerControlProvider : public d20::IAcDerControlProvider {
+public:
+    std::optional<d20::AcDerControlConfig>
+    get_ac_der_control_config(const d20::AcDerControlContext& context) const override {
+        (void)context;
+        return std::nullopt;
+    }
+};
 } // namespace
 
 SCENARIO("AC charge parameter discovery state handling") {
@@ -318,6 +346,7 @@ SCENARIO("AC charge parameter discovery state handling") {
         auto ac_der_control_config = d20::make_default_ac_der_control_config();
         ac_der_control_config.cpd_control.active_power_support->volt_watt->u_start = dt::from_float(241.0f);
         ac_der_control_config.cpd_control.maximum_level_dc_injection = dt::from_float(0.5f);
+        RecordingAcDerControlProvider provider(ac_der_control_config);
 
         message_20::AC_ChargeParameterDiscoveryRequest req;
         req.header.session_id = session.get_id();
@@ -330,11 +359,15 @@ SCENARIO("AC charge parameter discovery state handling") {
         req_out.min_discharge_power = {1, 3};
         req_out.processing = dt::Processing::Finished;
 
-        const auto res = d20::state::handle_request(req, session, limits, iso15118::d20::AcPresentPower{},
-                                                    ac_der_control_config);
+        const auto res = d20::state::handle_request(req, session, limits, iso15118::d20::AcPresentPower{}, provider);
 
         THEN("ResponseCode: OK and DER AC transfer mode is returned") {
             REQUIRE(res.response_code == dt::ResponseCode::OK);
+            REQUIRE(provider.calls == 1);
+            REQUIRE(provider.last_context.has_value());
+            REQUIRE(provider.last_context->selected_energy_service == dt::ServiceCategory::AC_DER);
+            REQUIRE(provider.last_context->selected_control_mode == dt::ControlMode::Dynamic);
+            REQUIRE(provider.last_context->selected_der_control_functions.has_value());
             REQUIRE(std::holds_alternative<DER_AC_ModeRes>(res.transfer_mode));
 
             const auto& transfer_mode = std::get<DER_AC_ModeRes>(res.transfer_mode);
@@ -358,6 +391,33 @@ SCENARIO("AC charge parameter discovery state handling") {
             REQUIRE(transfer_mode.der_control.reactive_power_support->watt_cos_phi.has_value());
             REQUIRE(transfer_mode.der_control.overvoltage_fault_ride_through.has_value());
             REQUIRE(transfer_mode.der_control.zero_current.has_value());
+        }
+    }
+
+    GIVEN("Bad Case: AC_DER selected but application provider has no AC DER config") {
+        const auto service_parameters = d20::SelectedServiceParameters(
+            dt::ServiceCategory::AC_DER, dt::AcConnector::ThreePhase, dt::ControlMode::Dynamic,
+            dt::MobilityNeedsMode::ProvidedByEvcc, dt::Pricing::NoPricing, dt::BptChannel::Unified,
+            dt::GeneratorMode::GridFollowing, 230, dt::GridCodeIslandingDetectionMethod::Passive,
+            get_mandatory_der_control_functions());
+
+        auto session = d20::Session(service_parameters);
+
+        auto limits = d20::AcTransferLimits{};
+        limits.charge_power.max = dt::from_float(11000.0f);
+        limits.charge_power.min = dt::from_float(1000.0f);
+        limits.nominal_frequency = dt::from_float(50.0f);
+
+        message_20::AC_ChargeParameterDiscoveryRequest req;
+        req.header.session_id = session.get_id();
+        req.header.timestamp = 1691411798;
+        req.transfer_mode.emplace<DER_AC_ModeReq>();
+
+        const UnavailableAcDerControlProvider provider;
+        const auto res = d20::state::handle_request(req, session, limits, iso15118::d20::AcPresentPower{}, provider);
+
+        THEN("ResponseCode: FAILED_WrongChargeParameter") {
+            REQUIRE(res.response_code == dt::ResponseCode::FAILED_WrongChargeParameter);
         }
     }
 

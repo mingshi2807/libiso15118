@@ -2,6 +2,8 @@
 // Vedecom 2026 : Contributors to EVerest
 #include <iso15118/d20/ac_der_control.hpp>
 
+#include <utility>
+
 namespace iso15118::d20 {
 
 namespace {
@@ -17,6 +19,23 @@ dt::RationalNumber one() {
 dt::RationalNumber seconds(const uint16_t value) {
     return {static_cast<int16_t>(value), 0};
 }
+
+class StaticAcDerControlProvider : public IAcDerControlProvider {
+public:
+    explicit StaticAcDerControlProvider(AcDerControlConfig config_) : config(std::move(config_)) {
+    }
+
+    std::optional<AcDerControlConfig> get_ac_der_control_config(const AcDerControlContext& context) const override {
+        if (context.selected_energy_service != dt::ServiceCategory::AC_DER) {
+            return std::nullopt;
+        }
+
+        return config;
+    }
+
+private:
+    AcDerControlConfig config;
+};
 
 dt::DERCurve make_der_curve(const dt::DERCurveDataUnit x_unit, const dt::DERCurveDataUnit y_unit) {
     dt::DERCurve curve;
@@ -100,6 +119,10 @@ AcDerControlConfig make_default_ac_der_control_config() {
                                    false, zero()};
 
     return config;
+}
+
+std::shared_ptr<const IAcDerControlProvider> make_static_ac_der_control_provider(AcDerControlConfig config) {
+    return std::make_shared<StaticAcDerControlProvider>(std::move(config));
 }
 
 } // namespace iso15118::d20

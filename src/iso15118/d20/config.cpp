@@ -204,6 +204,9 @@ SessionConfig::SessionConfig(EvseSetupConfig config) :
     dc_limits(std::move(config.dc_limits)),
     ac_limits(std::move(config.ac_limits)),
     ac_der_control_config(config.ac_der_control_config.value_or(make_default_ac_der_control_config())),
+    ac_der_control_provider(config.ac_der_control_provider != nullptr
+                                ? std::move(config.ac_der_control_provider)
+                                : make_static_ac_der_control_provider(ac_der_control_config)),
     powersupply_limits(std::move(config.powersupply_limits)),
     supported_control_mobility_modes(std::move(config.control_mobility_modes)),
     custom_protocol(std::move(config.custom_protocol)) {

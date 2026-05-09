@@ -3,6 +3,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -42,6 +43,7 @@ struct EvseSetupConfig {
     std::optional<BptSetupConfig> bpt_setup_config{std::nullopt};
     d20::DcTransferLimits powersupply_limits;
     std::optional<AcDerControlConfig> ac_der_control_config{std::nullopt};
+    std::shared_ptr<const IAcDerControlProvider> ac_der_control_provider{nullptr};
 };
 
 // This should only have EVSE information
@@ -71,6 +73,7 @@ struct SessionConfig {
     DcTransferLimits dc_limits;
     AcTransferLimits ac_limits;
     AcDerControlConfig ac_der_control_config;
+    std::shared_ptr<const IAcDerControlProvider> ac_der_control_provider;
 
     DcTransferLimits powersupply_limits;
 
