@@ -31,6 +31,19 @@ The following table shows the current support for the listed EVSE ISO15118-20 fe
 | Internet Service                   |                    |
 | Parking Status Service             |                    |
 
+AC DER SECC Integration
+-----------------------
+
+AC DER IEC support exposes a SECC application-layer provider contract through
+`iso15118::d20::IAcDerControlProvider`. Production applications should inject
+their provider through `EvseSetupConfig::ac_der_control_provider` so
+ChargeParameterDiscovery and ChargeLoop can obtain DER control data from the
+SECC policy layer at runtime.
+
+See [docs/ac_der_secc_provider.md](docs/ac_der_secc_provider.md) and the
+compilable example in
+[examples/ac_der_secc_provider.cpp](examples/ac_der_secc_provider.cpp).
+
 ISO 15118 Support
 -----------------
 

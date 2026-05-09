@@ -46,6 +46,7 @@ message(STATUS "Building libiso15118 with the following compile options: ${ISO15
 if((${CMAKE_PROJECT_NAME} STREQUAL ${PROJECT_NAME} OR ${PROJECT_NAME}_BUILD_TESTING) AND BUILD_TESTING)
     set(ISO15118_BUILD_TESTING ON)
 endif()
+option(ISO15118_BUILD_EXAMPLES "Build example applications" ${ISO15118_BUILD_TESTING})
 
 # dependencies
 if (NOT DISABLE_EDM)
@@ -91,6 +92,10 @@ endif()
 
 add_subdirectory(input)
 add_subdirectory(src)
+
+if (ISO15118_BUILD_EXAMPLES)
+    add_subdirectory(examples)
+endif()
 
 if (ISO15118_BUILD_TESTING)
     include(CTest)
