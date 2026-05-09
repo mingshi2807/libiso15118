@@ -110,26 +110,19 @@ bool has_mandatory_ac_der_controls(const dt::DERControlFunctions& controls) {
            controls.over_voltage_fault_ride_through and controls.zero_current;
 }
 
-dt::DSOQSetpoint make_dso_q_setpoint(const AcTargetPower& target_powers) {
-    const auto zero = dt::RationalNumber{0, 0};
-    return {target_powers.target_reactive_power.value_or(zero), target_powers.target_reactive_power_L2,
-            target_powers.target_reactive_power_L3, false, zero};
-}
-
-dt::DSOCosPhiSetpoint make_dso_cos_phi_setpoint() {
-    const auto zero = dt::RationalNumber{0, 0};
-    return {dt::RationalNumber{1, 0}, std::nullopt, std::nullopt, dt::DERPowerFactorExcitation::OverExcited, false,
-            zero};
+bool has_configured_ac_der_setpoints(const dt::DERControlFunctions& controls, const AcDerControlConfig& config) {
+    (void)controls;
+    (void)config;
+    return true;
 }
 
 template <typename Res>
-void fill_der_control_setpoints(Res& out, const AcTargetPower& target_powers,
-                                const dt::DERControlFunctions& controls) {
+void fill_der_control_setpoints(Res& out, const AcDerControlConfig& config, const dt::DERControlFunctions& controls) {
     if (controls.dso_q_setpoint_provision) {
-        out.dso_q_setpoint = make_dso_q_setpoint(target_powers);
+        out.dso_q_setpoint = config.dso_q_setpoint;
     }
     if (controls.dso_cos_phi_setpoint_provision) {
-        out.dso_cos_phi_setpoint = make_dso_cos_phi_setpoint();
+        out.dso_cos_phi_setpoint = config.dso_cos_phi_setpoint;
     }
 }
 
@@ -154,7 +147,8 @@ message_20::AC_ChargeLoopResponse handle_request(const message_20::AC_ChargeLoop
                                                  const d20::Session& session, bool stop, bool pause,
                                                  float target_frequency, const d20::AcTransferLimits& ac_limits,
                                                  const AcTargetPower& target_powers, const AcPresentPower& present_powers,
-                                                 const UpdateDynamicModeParameters& dynamic_parameters) {
+                                                 const UpdateDynamicModeParameters& dynamic_parameters,
+                                                 const AcDerControlConfig& ac_der_control_config) {
 
     message_20::AC_ChargeLoopResponse res;
 
@@ -197,15 +191,19 @@ message_20::AC_ChargeLoopResponse handle_request(const message_20::AC_ChargeLoop
             selected_energy_service != dt::ServiceCategory::AC_DER) {
             return response_with_code(res, dt::ResponseCode::FAILED);
         }
-        if (not selected_der_controls.has_value() or
-            not has_mandatory_ac_der_controls(selected_der_controls.value())) {
+        if (not selected_der_controls.has_value()) {
+            return response_with_code(res, dt::ResponseCode::FAILED);
+        }
+        const auto& controls = selected_der_controls.value();
+        if (not has_mandatory_ac_der_controls(controls) or
+            not has_configured_ac_der_setpoints(controls, ac_der_control_config)) {
             return response_with_code(res, dt::ResponseCode::FAILED);
         }
 
         auto& res_mode = res.control_mode.emplace<Scheduled_DER_AC_Res>();
         convert(static_cast<Scheduled_AC_Res&>(res_mode), target_powers, present_powers);
         fill_der_power_limits(res_mode, ac_limits);
-        fill_der_control_setpoints(res_mode, target_powers, selected_der_controls.value());
+        fill_der_control_setpoints(res_mode, ac_der_control_config, controls);
 
     } else if (std::holds_alternative<Dynamic_AC_Req>(req.control_mode)) {
 
@@ -242,15 +240,19 @@ message_20::AC_ChargeLoopResponse handle_request(const message_20::AC_ChargeLoop
         if (selected_control_mode != dt::ControlMode::Dynamic or selected_energy_service != dt::ServiceCategory::AC_DER) {
             return response_with_code(res, dt::ResponseCode::FAILED);
         }
-        if (not selected_der_controls.has_value() or
-            not has_mandatory_ac_der_controls(selected_der_controls.value())) {
+        if (not selected_der_controls.has_value()) {
+            return response_with_code(res, dt::ResponseCode::FAILED);
+        }
+        const auto& controls = selected_der_controls.value();
+        if (not has_mandatory_ac_der_controls(controls) or
+            not has_configured_ac_der_setpoints(controls, ac_der_control_config)) {
             return response_with_code(res, dt::ResponseCode::FAILED);
         }
 
         auto& res_mode = res.control_mode.emplace<Dynamic_DER_AC_Res>();
         convert(static_cast<Dynamic_AC_Res&>(res_mode), target_powers, present_powers);
         fill_der_power_limits(res_mode, ac_limits);
-        fill_der_control_setpoints(res_mode, target_powers, selected_der_controls.value());
+        fill_der_control_setpoints(res_mode, ac_der_control_config, controls);
 
         if (selected_mobility_needs_mode == dt::MobilityNeedsMode::ProvidedBySecc) {
             set_dynamic_parameters_in_res(res_mode, dynamic_parameters, res.header.timestamp);
@@ -274,6 +276,15 @@ message_20::AC_ChargeLoopResponse handle_request(const message_20::AC_ChargeLoop
 
 message_20::AC_ChargeLoopResponse handle_request(const message_20::AC_ChargeLoopRequest& req,
                                                  const d20::Session& session, bool stop, bool pause,
+                                                 float target_frequency, const d20::AcTransferLimits& ac_limits,
+                                                 const AcTargetPower& target_powers, const AcPresentPower& present_powers,
+                                                 const UpdateDynamicModeParameters& dynamic_parameters) {
+    return handle_request(req, session, stop, pause, target_frequency, ac_limits, target_powers, present_powers,
+                          dynamic_parameters, make_default_ac_der_control_config());
+}
+
+message_20::AC_ChargeLoopResponse handle_request(const message_20::AC_ChargeLoopRequest& req,
+                                                 const d20::Session& session, bool stop, bool pause,
                                                  float target_frequency, const AcTargetPower& target_powers,
                                                  const AcPresentPower& present_powers,
                                                  const UpdateDynamicModeParameters& dynamic_parameters) {
@@ -282,7 +293,7 @@ message_20::AC_ChargeLoopResponse handle_request(const message_20::AC_ChargeLoop
                                                 std::nullopt,  std::nullopt, std::nullopt, std::nullopt,
                                                 std::nullopt};
     return handle_request(req, session, stop, pause, target_frequency, fallback_limits, target_powers, present_powers,
-                          dynamic_parameters);
+                          dynamic_parameters, make_default_ac_der_control_config());
 }
 
 void AC_ChargeLoop::enter() {
@@ -341,8 +352,9 @@ Result AC_ChargeLoop::feed(Event ev) {
             first_entry_in_charge_loop = false;
         }
 
-        const auto res = handle_request(*req, m_ctx.session, stop, pause, target_frequency, m_ctx.session_config.ac_limits, target_powers,
-                                        present_powers, dynamic_parameters);
+        const auto res = handle_request(*req, m_ctx.session, stop, pause, target_frequency,
+                                        m_ctx.session_config.ac_limits, target_powers, present_powers,
+                                        dynamic_parameters, m_ctx.session_config.ac_der_control_config);
 
         m_ctx.respond(res);
 

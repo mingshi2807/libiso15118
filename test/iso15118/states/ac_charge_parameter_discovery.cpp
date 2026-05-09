@@ -315,6 +315,9 @@ SCENARIO("AC charge parameter discovery state handling") {
         limits.charge_power.min = dt::from_float(1000.0f);
         limits.nominal_frequency = dt::from_float(50.0f);
         limits.discharge_power = d20::Limit<dt::RationalNumber>{dt::from_float(6000.0f), dt::from_float(1000.0f)};
+        auto ac_der_control_config = d20::make_default_ac_der_control_config();
+        ac_der_control_config.cpd_control.active_power_support->volt_watt->u_start = dt::from_float(241.0f);
+        ac_der_control_config.cpd_control.maximum_level_dc_injection = dt::from_float(0.5f);
 
         message_20::AC_ChargeParameterDiscoveryRequest req;
         req.header.session_id = session.get_id();
@@ -327,7 +330,8 @@ SCENARIO("AC charge parameter discovery state handling") {
         req_out.min_discharge_power = {1, 3};
         req_out.processing = dt::Processing::Finished;
 
-        const auto res = d20::state::handle_request(req, session, limits, iso15118::d20::AcPresentPower{});
+        const auto res = d20::state::handle_request(req, session, limits, iso15118::d20::AcPresentPower{},
+                                                    ac_der_control_config);
 
         THEN("ResponseCode: OK and DER AC transfer mode is returned") {
             REQUIRE(res.response_code == dt::ResponseCode::OK);
@@ -341,8 +345,11 @@ SCENARIO("AC charge parameter discovery state handling") {
             REQUIRE(transfer_mode.operating_mode == dt::EVOperatingMode::GridFollowing);
             REQUIRE(transfer_mode.grid_connection_mode == dt::GridConnectionMode::GridConnected);
             REQUIRE(transfer_mode.der_control.maximum_level_dc_injection.has_value());
+            REQUIRE(dt::from_RationalNumber(*transfer_mode.der_control.maximum_level_dc_injection) == 0.5f);
             REQUIRE(transfer_mode.der_control.active_power_support.has_value());
             REQUIRE(transfer_mode.der_control.active_power_support->volt_watt.has_value());
+            REQUIRE(dt::from_RationalNumber(transfer_mode.der_control.active_power_support->volt_watt->u_start) ==
+                    241.0f);
             REQUIRE(transfer_mode.der_control.active_power_support->under_frequency_watt.has_value());
             REQUIRE(transfer_mode.der_control.active_power_support->over_frequency_watt.has_value());
             REQUIRE(transfer_mode.der_control.reactive_power_support.has_value());

@@ -25,18 +25,6 @@ void convert(Out& out, const d20::AcTransferLimits& limits, const d20::AcPresent
 
 namespace {
 
-dt::RationalNumber zero() {
-    return {0, 0};
-}
-
-dt::RationalNumber one() {
-    return {1, 0};
-}
-
-dt::RationalNumber seconds(const uint16_t value) {
-    return {static_cast<int16_t>(value), 0};
-}
-
 bool has_mandatory_ac_der_controls(const dt::DERControlFunctions& controls) {
     return controls.volt_watt and controls.dso_q_setpoint_provision and controls.dso_cos_phi_setpoint_provision and
            controls.dc_injection_restriction and controls.under_frequency_watt and controls.over_frequency_watt and
@@ -44,109 +32,29 @@ bool has_mandatory_ac_der_controls(const dt::DERControlFunctions& controls) {
            controls.over_voltage_fault_ride_through and controls.zero_current;
 }
 
-dt::DERCurve make_der_curve(const dt::DERCurveDataUnit x_unit, const dt::DERCurveDataUnit y_unit) {
-    dt::DERCurve curve;
-    curve.x_unit = x_unit;
-    curve.y_unit = y_unit;
-    curve.curve_data_points.push_back({zero(), {zero(), std::nullopt}});
-    curve.curve_data_points.push_back({one(), {one(), std::nullopt}});
-    curve.pt1_response_reactive_power = false;
-    curve.step_response_time_constant_reactive_power = seconds(0);
-    return curve;
-}
+bool has_configured_ac_der_controls(const dt::DERControlFunctions& controls, const AcDerControlConfig& config) {
+    const auto& der_control = config.cpd_control;
+    const auto has_active_power = der_control.active_power_support.has_value();
+    const auto has_reactive_power = der_control.reactive_power_support.has_value();
 
-dt::FrequencyWatt make_frequency_watt(const float start_frequency, const float stop_frequency) {
-    dt::FrequencyWatt frequency_watt;
-    frequency_watt.f_start = dt::from_float(start_frequency);
-    frequency_watt.f_stop = dt::from_float(stop_frequency);
-    frequency_watt.slope = one();
-    frequency_watt.power_reference = dt::DERPowerReference::MaximumDischargePower;
-    frequency_watt.hysteresis_control = false;
-    frequency_watt.pt1_response_active_power = false;
-    frequency_watt.step_response_time_constant_active_power = seconds(0);
-    return frequency_watt;
-}
-
-dt::VoltWatt make_volt_watt() {
-    dt::VoltWatt volt_watt;
-    volt_watt.power_reference = dt::DERPowerReference::MaximumDischargePower;
-    volt_watt.u_start = dt::from_float(230.0f);
-    volt_watt.u_stop = dt::from_float(253.0f);
-    volt_watt.pt1_response_active_power = false;
-    volt_watt.step_response_time_constant_active_power = seconds(0);
-    return volt_watt;
-}
-
-dt::FaultRideThrough make_fault_ride_through() {
-    dt::FaultRideThrough fault_ride_through;
-    fault_ride_through.voltage_limit_start_frt = dt::from_float(253.0f);
-    fault_ride_through.pt1_response_active_power = false;
-    fault_ride_through.step_response_time_constant_active_power = seconds(0);
-    fault_ride_through.pt1_response_reactive_power = false;
-    fault_ride_through.step_response_time_constant_reactive_power = seconds(0);
-    return fault_ride_through;
-}
-
-dt::ZeroCurrent make_zero_current() {
-    dt::ZeroCurrent zero_current;
-    zero_current.over_voltage_limit = dt::from_float(253.0f);
-    zero_current.pt1_response_active_power = false;
-    zero_current.step_response_time_constant_active_power = seconds(0);
-    zero_current.pt1_response_reactive_power = false;
-    zero_current.step_response_time_constant_reactive_power = seconds(0);
-    return zero_current;
-}
-
-dt::DERControl make_der_control(const dt::DERControlFunctions& controls) {
-    dt::DERControl der_control;
-
-    if (controls.over_voltage_fault_ride_through) {
-        der_control.overvoltage_fault_ride_through = make_fault_ride_through();
-    }
-
-    if (controls.under_voltage_fault_ride_through) {
-        der_control.undervoltage_fault_ride_through = make_fault_ride_through();
-    }
-
-    if (controls.zero_current) {
-        der_control.zero_current = make_zero_current();
-    }
-
-    if (controls.volt_var or controls.watt_var or controls.watt_cos_phi) {
-        auto& reactive_power_support = der_control.reactive_power_support.emplace();
-        if (controls.volt_var) {
-            reactive_power_support.volt_var = make_der_curve(dt::DERCurveDataUnit::V, dt::DERCurveDataUnit::var);
-        }
-        if (controls.watt_var) {
-            reactive_power_support.watt_var = make_der_curve(dt::DERCurveDataUnit::W, dt::DERCurveDataUnit::var);
-        }
-        if (controls.watt_cos_phi) {
-            reactive_power_support.watt_cos_phi = make_der_curve(dt::DERCurveDataUnit::W, dt::DERCurveDataUnit::var);
-            reactive_power_support.watt_cos_phi->curve_data_points[0].y_value.excitation =
-                dt::DERPowerFactorExcitation::OverExcited;
-            reactive_power_support.watt_cos_phi->curve_data_points[1].y_value.excitation =
-                dt::DERPowerFactorExcitation::UnderExcited;
-        }
-    }
-
-    if (controls.under_frequency_watt or controls.over_frequency_watt or controls.volt_watt) {
-        auto& active_power_support = der_control.active_power_support.emplace();
-        if (controls.under_frequency_watt) {
-            active_power_support.under_frequency_watt = make_frequency_watt(49.8f, 49.5f);
-        }
-        if (controls.over_frequency_watt) {
-            active_power_support.over_frequency_watt = make_frequency_watt(50.2f, 50.5f);
-        }
-        if (controls.volt_watt) {
-            active_power_support.volt_watt = make_volt_watt();
-        }
-    }
-
-    if (controls.dc_injection_restriction) {
-        der_control.maximum_level_dc_injection = zero();
-    }
-
-    return der_control;
+    return (not controls.volt_watt or
+            (has_active_power and der_control.active_power_support->volt_watt.has_value())) and
+           (not controls.under_frequency_watt or
+            (has_active_power and der_control.active_power_support->under_frequency_watt.has_value())) and
+           (not controls.over_frequency_watt or
+            (has_active_power and der_control.active_power_support->over_frequency_watt.has_value())) and
+           (not controls.volt_var or
+            (has_reactive_power and der_control.reactive_power_support->volt_var.has_value())) and
+           (not controls.watt_var or
+            (has_reactive_power and der_control.reactive_power_support->watt_var.has_value())) and
+           (not controls.watt_cos_phi or
+            (has_reactive_power and der_control.reactive_power_support->watt_cos_phi.has_value())) and
+           (not controls.over_voltage_fault_ride_through or
+            der_control.overvoltage_fault_ride_through.has_value()) and
+           (not controls.under_voltage_fault_ride_through or
+            der_control.undervoltage_fault_ride_through.has_value()) and
+           (not controls.zero_current or der_control.zero_current.has_value()) and
+           (not controls.dc_injection_restriction or der_control.maximum_level_dc_injection.has_value());
 }
 
 } // namespace
@@ -228,7 +136,8 @@ void convert(DER_AC_ModeRes& out, const d20::AcTransferLimits& limits, const d20
 
 message_20::AC_ChargeParameterDiscoveryResponse
 handle_request(const message_20::AC_ChargeParameterDiscoveryRequest& req, const d20::Session& session,
-               const d20::AcTransferLimits& limits, const d20::AcPresentPower& powers) {
+               const d20::AcTransferLimits& limits, const d20::AcPresentPower& powers,
+               const d20::AcDerControlConfig& ac_der_control_config) {
 
     message_20::AC_ChargeParameterDiscoveryResponse res;
 
@@ -259,20 +168,30 @@ handle_request(const message_20::AC_ChargeParameterDiscoveryRequest& req, const 
         if (selected_energy_service != message_20::datatypes::ServiceCategory::AC_DER) {
             return response_with_code(res, message_20::datatypes::ResponseCode::FAILED_WrongChargeParameter);
         }
-        if (not selected_services.selected_der_control_functions.has_value() or
-            not has_mandatory_ac_der_controls(selected_services.selected_der_control_functions.value())) {
+        if (not selected_services.selected_der_control_functions.has_value()) {
+            return response_with_code(res, message_20::datatypes::ResponseCode::FAILED_WrongChargeParameter);
+        }
+        const auto& controls = selected_services.selected_der_control_functions.value();
+        if (not has_mandatory_ac_der_controls(controls) or
+            not has_configured_ac_der_controls(controls, ac_der_control_config)) {
             return response_with_code(res, message_20::datatypes::ResponseCode::FAILED_WrongChargeParameter);
         }
 
         auto& mode = res.transfer_mode.emplace<DER_AC_ModeRes>();
         convert(mode, limits, powers);
-        mode.der_control = make_der_control(selected_services.selected_der_control_functions.value());
+        mode.der_control = ac_der_control_config.cpd_control;
 
     } else {
         return response_with_code(res, message_20::datatypes::ResponseCode::FAILED_WrongChargeParameter);
     }
 
     return response_with_code(res, message_20::datatypes::ResponseCode::OK);
+}
+
+message_20::AC_ChargeParameterDiscoveryResponse
+handle_request(const message_20::AC_ChargeParameterDiscoveryRequest& req, const d20::Session& session,
+               const d20::AcTransferLimits& limits, const d20::AcPresentPower& powers) {
+    return handle_request(req, session, limits, powers, make_default_ac_der_control_config());
 }
 
 void AC_ChargeParameterDiscovery::enter() {
@@ -308,7 +227,8 @@ Result AC_ChargeParameterDiscovery::feed(Event ev) {
             m_ctx.session_ev_info.ev_transfer_limits.emplace<DER_AC_ModeReq>(*mode);
         }
 
-        const auto res = handle_request(*req, m_ctx.session, m_ctx.session_config.ac_limits, present_powers);
+        const auto res = handle_request(*req, m_ctx.session, m_ctx.session_config.ac_limits, present_powers,
+                                        m_ctx.session_config.ac_der_control_config);
 
         m_ctx.respond(res);
 

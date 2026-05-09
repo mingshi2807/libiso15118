@@ -347,9 +347,14 @@ SCENARIO("AC charge loop state handling") {
         ac_target_power.target_reactive_power = {2, 3};
         auto ac_present_power = d20::AcPresentPower{};
         ac_present_power.present_active_power = {11, 3};
+        auto ac_der_control_config = d20::make_default_ac_der_control_config();
+        ac_der_control_config.dso_q_setpoint.value = {7, 2};
+        ac_der_control_config.dso_cos_phi_setpoint.value = {95, -2};
+        ac_der_control_config.dso_cos_phi_setpoint.excitation = dt::DERPowerFactorExcitation::UnderExcited;
 
         const auto res = d20::state::handle_request(req, session, false, false, 50, ac_limits, ac_target_power,
-                                                    ac_present_power, d20::UpdateDynamicModeParameters());
+                                                    ac_present_power, d20::UpdateDynamicModeParameters(),
+                                                    ac_der_control_config);
 
         THEN("ResponseCode: OK and DER control mode should be selected") {
             REQUIRE(res.response_code == dt::ResponseCode::OK);
@@ -360,9 +365,10 @@ SCENARIO("AC charge loop state handling") {
             REQUIRE(dt::from_RationalNumber(res_control_mode.max_charge_power) == 22000.0f);
             REQUIRE(dt::from_RationalNumber(res_control_mode.max_discharge_power) == 11000.0f);
             REQUIRE(res_control_mode.dso_q_setpoint.has_value());
-            REQUIRE(dt::from_RationalNumber(res_control_mode.dso_q_setpoint->value) == 2000.0f);
+            REQUIRE(dt::from_RationalNumber(res_control_mode.dso_q_setpoint->value) == 700.0f);
             REQUIRE(res_control_mode.dso_cos_phi_setpoint.has_value());
-            REQUIRE(res_control_mode.dso_cos_phi_setpoint->excitation == dt::DERPowerFactorExcitation::OverExcited);
+            REQUIRE(dt::from_RationalNumber(res_control_mode.dso_cos_phi_setpoint->value) == 0.95f);
+            REQUIRE(res_control_mode.dso_cos_phi_setpoint->excitation == dt::DERPowerFactorExcitation::UnderExcited);
         }
     }
 

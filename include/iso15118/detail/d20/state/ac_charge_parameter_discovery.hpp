@@ -13,4 +13,9 @@ message_20::AC_ChargeParameterDiscoveryResponse
 handle_request(const message_20::AC_ChargeParameterDiscoveryRequest& req, const d20::Session& session,
                const d20::AcTransferLimits& limits, const d20::AcPresentPower& powers);
 
+message_20::AC_ChargeParameterDiscoveryResponse
+handle_request(const message_20::AC_ChargeParameterDiscoveryRequest& req, const d20::Session& session,
+               const d20::AcTransferLimits& limits, const d20::AcPresentPower& powers,
+               const d20::AcDerControlConfig& ac_der_control_config);
+
 } // namespace iso15118::d20::state

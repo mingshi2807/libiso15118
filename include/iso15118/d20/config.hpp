@@ -6,6 +6,7 @@
 #include <optional>
 #include <vector>
 
+#include <iso15118/d20/ac_der_control.hpp>
 #include <iso15118/d20/limits.hpp>
 #include <iso15118/message/common_types.hpp>
 
@@ -40,6 +41,7 @@ struct EvseSetupConfig {
     std::optional<AcSetupConfig> ac_setup_config{std::nullopt};
     std::optional<BptSetupConfig> bpt_setup_config{std::nullopt};
     d20::DcTransferLimits powersupply_limits;
+    std::optional<AcDerControlConfig> ac_der_control_config{std::nullopt};
 };
 
 // This should only have EVSE information
@@ -68,6 +70,7 @@ struct SessionConfig {
 
     DcTransferLimits dc_limits;
     AcTransferLimits ac_limits;
+    AcDerControlConfig ac_der_control_config;
 
     DcTransferLimits powersupply_limits;
 
