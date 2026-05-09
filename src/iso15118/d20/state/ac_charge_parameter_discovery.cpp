@@ -49,8 +49,7 @@ bool has_configured_ac_der_controls(const dt::DERControlFunctions& controls, con
             (has_reactive_power and der_control.reactive_power_support->watt_var.has_value())) and
            (not controls.watt_cos_phi or
             (has_reactive_power and der_control.reactive_power_support->watt_cos_phi.has_value())) and
-           (not controls.over_voltage_fault_ride_through or
-            der_control.overvoltage_fault_ride_through.has_value()) and
+           (not controls.over_voltage_fault_ride_through or der_control.overvoltage_fault_ride_through.has_value()) and
            (not controls.under_voltage_fault_ride_through or
             der_control.undervoltage_fault_ride_through.has_value()) and
            (not controls.zero_current or der_control.zero_current.has_value()) and

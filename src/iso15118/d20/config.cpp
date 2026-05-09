@@ -86,8 +86,7 @@ auto get_default_der_control_functions() {
     control_functions.under_voltage_fault_ride_through = true;
     control_functions.zero_current = true;
 
-    control_functions.standard_bitmap =
-        (1u << 0) | (1u << 1) | (1u << 2) | (1u << 3) | (1u << 4) | (1u << 5);
+    control_functions.standard_bitmap = (1u << 0) | (1u << 1) | (1u << 2) | (1u << 3) | (1u << 4) | (1u << 5);
     control_functions.extended_bitmap = (1u << 0) | (1u << 1) | (1u << 2) | (1u << 3) | (1u << 4) | (1u << 5);
 
     return control_functions;
@@ -101,16 +100,13 @@ auto get_default_ac_der_parameter_list(const std::vector<ControlMobilityNeedsMod
 
     for (const auto& mode : control_mobility_modes) {
         for (const auto& connector : ac_setup_config.connectors) {
-            param_list.push_back({{{connector,
-                                    mode.control_mode,
-                                    get_mobility_needs_mode(mode),
-                                    ac_setup_config.voltage,
-                                    Pricing::NoPricing},
-                                   bpt_setup_config.bpt_channel,
-                                   bpt_setup_config.generator_mode,
-                                   bpt_setup_config.grid_code_detection_method.value_or(
-                                       dt::GridCodeIslandingDetectionMethod::Passive)},
-                                  get_default_der_control_functions()});
+            param_list.push_back(
+                {{{connector, mode.control_mode, get_mobility_needs_mode(mode), ac_setup_config.voltage,
+                   Pricing::NoPricing},
+                  bpt_setup_config.bpt_channel,
+                  bpt_setup_config.generator_mode,
+                  bpt_setup_config.grid_code_detection_method.value_or(dt::GridCodeIslandingDetectionMethod::Passive)},
+                 get_default_der_control_functions()});
         }
     }
 

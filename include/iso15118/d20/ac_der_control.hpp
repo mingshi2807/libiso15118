@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 Pionix GmbH and Contributors to EVerest
+// Vedecom 2026 : Contributors to EVerest
 #pragma once
 
 #include <iso15118/message/ac_charge_loop.hpp>

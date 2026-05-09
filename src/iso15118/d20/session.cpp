@@ -112,7 +112,7 @@ Session::Session() {
 }
 
 Session::Session(const PauseContext& pause_ctx) :
-    id(pause_ctx.old_session_id), selected_services(pause_ctx.selected_service_parameters){};
+    id(pause_ctx.old_session_id), selected_services(pause_ctx.selected_service_parameters) {};
 
 Session::Session(SelectedServiceParameters service_parameters_) : selected_services(service_parameters_) {
     std::random_device rd;
@@ -259,8 +259,7 @@ void Session::selected_service_parameters(const dt::ServiceCategory service, con
             this->selected_services = SelectedServiceParameters(
                 dt::ServiceCategory::AC_DER, parameters.connector, parameters.control_mode,
                 parameters.mobility_needs_mode, parameters.pricing, parameters.bpt_channel, parameters.generator_mode,
-                parameters.evse_nominal_voltage, parameters.grid_code_detection_method,
-                parameters.control_functions);
+                parameters.evse_nominal_voltage, parameters.grid_code_detection_method, parameters.control_functions);
         } else {
             // Todo(sl): Should be not the case -> Raise Error?
         }

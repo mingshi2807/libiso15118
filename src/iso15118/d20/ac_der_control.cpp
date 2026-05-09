@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 Pionix GmbH and Contributors to EVerest
+// Vedecom 2026 : Contributors to EVerest
 #include <iso15118/d20/ac_der_control.hpp>
 
 namespace iso15118::d20 {
