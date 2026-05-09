@@ -156,6 +156,44 @@ SCENARIO("Service detail state handling") {
         }
     }
 
+    GIVEN("Good Case - AC_DER Service") {
+        d20::Session session = d20::Session();
+        session.offered_services.energy_services = {dt::ServiceCategory::AC_DER};
+
+        auto session_config = d20::SessionConfig(evse_setup);
+        session_config.ac_der_parameter_list[0].control_functions.volt_watt = true;
+        session_config.ac_der_parameter_list[0].control_functions.dso_q_setpoint_provision = true;
+        session_config.ac_der_parameter_list[0].control_functions.dso_cos_phi_setpoint_provision = true;
+        session_config.ac_der_parameter_list[0].control_functions.dc_injection_restriction = true;
+
+        message_20::ServiceDetailRequest req;
+        req.header.session_id = session.get_id();
+        req.header.timestamp = 1691411798;
+        req.service = message_20::to_underlying_value(dt::ServiceCategory::AC_DER);
+
+        const auto res = d20::state::handle_request(req, session, session_config, std::nullopt);
+
+        THEN("ResponseCode: OK and DER service parameters are advertised") {
+            REQUIRE(res.response_code == dt::ResponseCode::OK);
+            REQUIRE(res.service == message_20::to_underlying_value(dt::ServiceCategory::AC_DER));
+            REQUIRE(res.service_parameter_list.size() == 1);
+
+            const auto& parameters = res.service_parameter_list[0];
+            REQUIRE(parameters.id == 0);
+            REQUIRE(parameters.parameter.size() == 22);
+            REQUIRE(parameters.parameter[8].name == "DERStandardControlFunctionsBitmap");
+            REQUIRE(parameters.parameter[9].name == "DERExtendedControlFunctionsBitmap");
+            REQUIRE(parameters.parameter[10].name == "VoltWatt");
+            REQUIRE(std::get<bool>(parameters.parameter[10].value));
+            REQUIRE(parameters.parameter[11].name == "DSOQSetPointProvision");
+            REQUIRE(std::get<bool>(parameters.parameter[11].value));
+            REQUIRE(parameters.parameter[12].name == "DSOQCosphiSetPointProvision");
+            REQUIRE(std::get<bool>(parameters.parameter[12].value));
+            REQUIRE(parameters.parameter[13].name == "DCInjectionRestriction");
+            REQUIRE(std::get<bool>(parameters.parameter[13].value));
+        }
+    }
+
     GIVEN("Good Case - 2x DC Services") {
 
         d20::Session session = d20::Session();

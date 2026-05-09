@@ -38,6 +38,27 @@ ParameterSet::ParameterSet(uint16_t _id, const AcBptParameterList& list) : id(_i
     parameter.push_back({"DetectionMethodGridCodeIslanding", static_cast<int32_t>(list.grid_code_detection_method)});
 }
 
+ParameterSet::ParameterSet(uint16_t _id, const AcDerParameterList& list) : ParameterSet(_id, static_cast<const AcBptParameterList&>(list)) {
+    parameter.push_back({"DERStandardControlFunctionsBitmap",
+                         static_cast<int32_t>(list.control_functions.standard_bitmap)});
+    parameter.push_back({"DERExtendedControlFunctionsBitmap",
+                         static_cast<int32_t>(list.control_functions.extended_bitmap)});
+    parameter.push_back({"VoltWatt", list.control_functions.volt_watt});
+    parameter.push_back({"DSOQSetPointProvision", list.control_functions.dso_q_setpoint_provision});
+    parameter.push_back({"DSOQCosphiSetPointProvision", list.control_functions.dso_cos_phi_setpoint_provision});
+    parameter.push_back({"DCInjectionRestriction", list.control_functions.dc_injection_restriction});
+    parameter.push_back({"UnderFrequencyWatt", list.control_functions.under_frequency_watt});
+    parameter.push_back({"OverFrequencyWatt", list.control_functions.over_frequency_watt});
+    parameter.push_back({"VoltVar", list.control_functions.volt_var});
+    parameter.push_back({"WattVar", list.control_functions.watt_var});
+    parameter.push_back({"WattCosphi", list.control_functions.watt_cos_phi});
+    parameter.push_back({"OverVoltageFaultRideThroughMode",
+                         list.control_functions.over_voltage_fault_ride_through});
+    parameter.push_back({"UnderVoltageFaultRideThroughMode",
+                         list.control_functions.under_voltage_fault_ride_through});
+    parameter.push_back({"ZeroCurrentMode", list.control_functions.zero_current});
+}
+
 ParameterSet::ParameterSet(uint16_t _id, const DcParameterList& list) {
     id = _id;
     // Connector

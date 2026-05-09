@@ -61,13 +61,20 @@ template <typename InType> void convert(const InType& in, datatypes::Scheduled_A
 template <>
 void convert(const struct iso20_ac_DER_Scheduled_AC_CLReqControlModeType& in,
              datatypes::DER_Scheduled_AC_CLReqControlMode& out) {
-    convert(in, static_cast<datatypes::BPT_Scheduled_AC_CLReqControlMode&>(out));
+    convert(in, static_cast<datatypes::Scheduled_AC_CLReqControlMode&>(out));
+    convert(in.EVMaximumDischargePower, out.max_discharge_power.emplace());
+    CB2CPP_CONVERT_IF_USED(in.EVMaximumDischargePower_L2, out.max_discharge_power_L2);
+    CB2CPP_CONVERT_IF_USED(in.EVMaximumDischargePower_L3, out.max_discharge_power_L3);
+    convert(in.EVMinimumDischargePower, out.min_discharge_power.emplace());
+    CB2CPP_CONVERT_IF_USED(in.EVMinimumDischargePower_L2, out.min_discharge_power_L2);
+    CB2CPP_CONVERT_IF_USED(in.EVMinimumDischargePower_L3, out.min_discharge_power_L3);
     CB2CPP_CONVERT_IF_USED(in.EVMaximumChargeReactivePower, out.max_charge_reactive_power);
     CB2CPP_CONVERT_IF_USED(in.EVMaximumChargeReactivePower_L2, out.max_charge_reactive_power_L2);
     CB2CPP_CONVERT_IF_USED(in.EVMaximumChargeReactivePower_L3, out.max_charge_reactive_power_L3);
     CB2CPP_CONVERT_IF_USED(in.EVMaximumDischargeReactivePower, out.max_discharge_reactive_power);
     CB2CPP_CONVERT_IF_USED(in.EVMaximumDischargeReactivePower_L2, out.max_discharge_reactive_power_L2);
     CB2CPP_CONVERT_IF_USED(in.EVMaximumDischargeReactivePower_L3, out.max_discharge_reactive_power_L3);
+    out.grid_event_condition = in.GridEventCondition;
 }
 
 template <>
@@ -135,7 +142,15 @@ void convert(const struct iso20_ac_BPT_Dynamic_AC_CLReqControlModeType& in,
 template <>
 void convert(const struct iso20_ac_DER_Dynamic_AC_CLReqControlModeType& in,
              datatypes::DER_Dynamic_AC_CLReqControlMode& out) {
-    convert(in, static_cast<datatypes::BPT_Dynamic_AC_CLReqControlMode&>(out));
+    convert(in, static_cast<datatypes::Dynamic_AC_CLReqControlMode&>(out));
+    convert(in.EVMaximumDischargePower, out.max_discharge_power);
+    CB2CPP_CONVERT_IF_USED(in.EVMaximumDischargePower_L2, out.max_discharge_power_L2);
+    CB2CPP_CONVERT_IF_USED(in.EVMaximumDischargePower_L3, out.max_discharge_power_L3);
+    convert(in.EVMinimumDischargePower, out.min_discharge_power);
+    CB2CPP_CONVERT_IF_USED(in.EVMinimumDischargePower_L2, out.min_discharge_power_L2);
+    CB2CPP_CONVERT_IF_USED(in.EVMinimumDischargePower_L3, out.min_discharge_power_L3);
+    CB2CPP_CONVERT_IF_USED(in.EVMaximumV2XEnergyRequest, out.max_v2x_energy_request);
+    CB2CPP_CONVERT_IF_USED(in.EVMinimumV2XEnergyRequest, out.min_v2x_energy_request);
     CB2CPP_CONVERT_IF_USED(in.EVMaximumChargeReactivePower, out.max_charge_reactive_power);
     CB2CPP_CONVERT_IF_USED(in.EVMaximumChargeReactivePower_L2, out.max_charge_reactive_power_L2);
     CB2CPP_CONVERT_IF_USED(in.EVMaximumChargeReactivePower_L3, out.max_charge_reactive_power_L3);
@@ -628,6 +643,7 @@ public:
         CPP2CB_CONVERT_IF_USED(in.max_discharge_reactive_power, out.EVMaximumDischargeReactivePower);
         CPP2CB_CONVERT_IF_USED(in.max_discharge_reactive_power_L2, out.EVMaximumDischargeReactivePower_L2);
         CPP2CB_CONVERT_IF_USED(in.max_discharge_reactive_power_L3, out.EVMaximumDischargeReactivePower_L3);
+        out.GridEventCondition = in.grid_event_condition;
     }
 
     template <typename ModeReqTypeIn, typename ModeReqTypeOut>

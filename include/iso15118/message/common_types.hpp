@@ -170,6 +170,41 @@ enum class GridCodeIslandingDetectionMethod {
     Passive = 2,
 };
 
+enum class DERCurveDataUnit {
+    V = 0,
+    Hz = 1,
+    W = 2,
+    s = 3,
+    var = 4,
+};
+
+enum class DERPowerReference {
+    MaximumDischargePower = 0,
+    MomentaryPower = 1,
+};
+
+enum class DERPowerFactorExcitation {
+    OverExcited = 0,
+    UnderExcited = 1,
+};
+
+struct DERControlFunctions {
+    uint32_t standard_bitmap{0};
+    uint32_t extended_bitmap{0};
+    bool volt_watt{false};
+    bool dso_q_setpoint_provision{false};
+    bool dso_cos_phi_setpoint_provision{false};
+    bool dc_injection_restriction{false};
+    bool under_frequency_watt{false};
+    bool over_frequency_watt{false};
+    bool volt_var{false};
+    bool watt_var{false};
+    bool watt_cos_phi{false};
+    bool over_voltage_fault_ride_through{false};
+    bool under_voltage_fault_ride_through{false};
+    bool zero_current{false};
+};
+
 enum class Protocol {
     Ftp,
     Http,
@@ -217,6 +252,10 @@ struct AcBptParameterList : AcParameterList {
     BptChannel bpt_channel;
     GeneratorMode generator_mode;
     GridCodeIslandingDetectionMethod grid_code_detection_method;
+};
+
+struct AcDerParameterList : AcBptParameterList {
+    DERControlFunctions control_functions;
 };
 
 struct DcParameterList {

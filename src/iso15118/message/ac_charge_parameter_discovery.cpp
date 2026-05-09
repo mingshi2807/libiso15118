@@ -2,6 +2,7 @@
 // Copyright 2024 Pionix GmbH and Contributors to EVerest
 #include <iso15118/message/ac_charge_parameter_discovery.hpp>
 
+#include <algorithm>
 #include <type_traits>
 
 #include <iso15118/detail/variant_access.hpp>
@@ -21,6 +22,7 @@ using DER_AC_ModeRes = datatypes::DER_AC_CPDResEnergyTransferMode;
 
 template <> void convert(const iso20_ac_EVReactivePowerLimitsType& in, datatypes::EVReactivePowerLimits& out);
 template <> void convert(const iso20_ac_DERControlType& in, datatypes::DERControl& out);
+template <> void convert(const datatypes::DERControl& in, iso20_ac_DERControlType& out);
 
 // Begin conversion for deserializing an ACChargeParameterRequest (EVSEside)
 template <typename InType> void convert(const InType& in, AC_ModeReq& out) {
@@ -146,14 +148,221 @@ template <> void convert(const iso20_ac_DER_AC_CPDResEnergyTransferModeType& in,
     convert(in.DERControl, out.der_control);
 }
 
+template <> void convert(const iso20_ac_SetpointExcitationType& in, datatypes::DERSetpointExcitation& out) {
+    convert(in.SetpointValue, out.setpoint_value);
+    if (in.Excitation_isUsed) {
+        out.excitation.emplace();
+        cb_convert_enum(in.Excitation, out.excitation.value());
+    }
+}
+
+template <> void convert(const datatypes::DERSetpointExcitation& in, iso20_ac_SetpointExcitationType& out) {
+    init_iso20_ac_SetpointExcitationType(&out);
+    convert(in.setpoint_value, out.SetpointValue);
+    if (in.excitation) {
+        cb_convert_enum(in.excitation.value(), out.Excitation);
+    }
+    out.Excitation_isUsed = static_cast<bool>(in.excitation);
+}
+
+template <> void convert(const iso20_ac_DataTupleType& in, datatypes::DERCurveDataPoint& out) {
+    convert(in.xValue, out.x_value);
+    convert(in.yValue, out.y_value);
+}
+
+template <> void convert(const datatypes::DERCurveDataPoint& in, iso20_ac_DataTupleType& out) {
+    init_iso20_ac_DataTupleType(&out);
+    convert(in.x_value, out.xValue);
+    convert(in.y_value, out.yValue);
+}
+
+template <> void convert(const iso20_ac_DERCurveType& in, datatypes::DERCurve& out) {
+    cb_convert_enum(in.xUnit, out.x_unit);
+    cb_convert_enum(in.yUnit, out.y_unit);
+    out.curve_data_points.clear();
+    out.curve_data_points.reserve(in.CurveDataPoints.CurveDataPoint.arrayLen);
+    for (uint16_t i = 0; i < in.CurveDataPoints.CurveDataPoint.arrayLen; i++) {
+        auto& data_point = out.curve_data_points.emplace_back();
+        convert(in.CurveDataPoints.CurveDataPoint.array[i], data_point);
+    }
+    CB2CPP_CONVERT_IF_USED(in.MinCosPhi, out.min_cos_phi);
+    if (in.LockValueUnit_isUsed) {
+        out.lock_value_unit.emplace();
+        cb_convert_enum(in.LockValueUnit, out.lock_value_unit.value());
+    }
+    CB2CPP_CONVERT_IF_USED(in.LockInValue, out.lock_in_value);
+    CB2CPP_CONVERT_IF_USED(in.LockOutValue, out.lock_out_value);
+    out.pt1_response_reactive_power = in.PT1ResponseReactivePower;
+    convert(in.StepResponseTimeConstantReactivePower, out.step_response_time_constant_reactive_power);
+    CB2CPP_CONVERT_IF_USED(in.IntentionalDelay, out.intentional_delay);
+}
+
+template <> void convert(const datatypes::DERCurve& in, iso20_ac_DERCurveType& out) {
+    init_iso20_ac_DERCurveType(&out);
+    cb_convert_enum(in.x_unit, out.xUnit);
+    cb_convert_enum(in.y_unit, out.yUnit);
+    const auto array_size = sizeof(out.CurveDataPoints.CurveDataPoint.array) /
+                            sizeof(out.CurveDataPoints.CurveDataPoint.array[0]);
+    const auto point_count = std::min(in.curve_data_points.size(), array_size);
+    for (std::size_t i = 0; i < point_count; i++) {
+        convert(in.curve_data_points[i], out.CurveDataPoints.CurveDataPoint.array[i]);
+    }
+    out.CurveDataPoints.CurveDataPoint.arrayLen = static_cast<uint16_t>(point_count);
+    CPP2CB_CONVERT_IF_USED(in.min_cos_phi, out.MinCosPhi);
+    if (in.lock_value_unit) {
+        cb_convert_enum(in.lock_value_unit.value(), out.LockValueUnit);
+    }
+    out.LockValueUnit_isUsed = static_cast<bool>(in.lock_value_unit);
+    CPP2CB_CONVERT_IF_USED(in.lock_in_value, out.LockInValue);
+    CPP2CB_CONVERT_IF_USED(in.lock_out_value, out.LockOutValue);
+    out.PT1ResponseReactivePower = in.pt1_response_reactive_power;
+    convert(in.step_response_time_constant_reactive_power, out.StepResponseTimeConstantReactivePower);
+    CPP2CB_CONVERT_IF_USED(in.intentional_delay, out.IntentionalDelay);
+}
+
+template <> void convert(const iso20_ac_FrequencyWattType& in, datatypes::FrequencyWatt& out) {
+    convert(in.Fstart, out.f_start);
+    convert(in.Fstop, out.f_stop);
+    CB2CPP_ASSIGN_IF_USED(in.IntentionalDelayFstop, out.intentional_delay_f_stop);
+    convert(in.Slope, out.slope);
+    CB2CPP_ASSIGN_IF_USED(in.DeactivationTime, out.deactivation_time);
+    CB2CPP_ASSIGN_IF_USED(in.IntentionalDelayPowerControl, out.intentional_delay_power_control);
+    cb_convert_enum(in.PowerReference, out.power_reference);
+    out.hysteresis_control = in.HysteresisControl;
+    CB2CPP_ASSIGN_IF_USED(in.PowerUpRamp, out.power_up_ramp);
+    out.pt1_response_active_power = in.PT1ResponseActivePower;
+    convert(in.StepResponseTimeConstantActivePower, out.step_response_time_constant_active_power);
+}
+
+template <> void convert(const datatypes::FrequencyWatt& in, iso20_ac_FrequencyWattType& out) {
+    init_iso20_ac_FrequencyWattType(&out);
+    convert(in.f_start, out.Fstart);
+    convert(in.f_stop, out.Fstop);
+    CPP2CB_ASSIGN_IF_USED(in.intentional_delay_f_stop, out.IntentionalDelayFstop);
+    convert(in.slope, out.Slope);
+    CPP2CB_ASSIGN_IF_USED(in.deactivation_time, out.DeactivationTime);
+    CPP2CB_ASSIGN_IF_USED(in.intentional_delay_power_control, out.IntentionalDelayPowerControl);
+    cb_convert_enum(in.power_reference, out.PowerReference);
+    out.HysteresisControl = in.hysteresis_control;
+    CPP2CB_ASSIGN_IF_USED(in.power_up_ramp, out.PowerUpRamp);
+    out.PT1ResponseActivePower = in.pt1_response_active_power;
+    convert(in.step_response_time_constant_active_power, out.StepResponseTimeConstantActivePower);
+}
+
+template <> void convert(const iso20_ac_VoltWattType& in, datatypes::VoltWatt& out) {
+    cb_convert_enum(in.PowerReference, out.power_reference);
+    convert(in.UStart, out.u_start);
+    convert(in.UStop, out.u_stop);
+    out.pt1_response_active_power = in.PT1ResponseActivePower;
+    convert(in.StepResponseTimeConstantActivePower, out.step_response_time_constant_active_power);
+    CB2CPP_ASSIGN_IF_USED(in.IntentionalDelayPowerControl, out.intentional_delay_power_control);
+}
+
+template <> void convert(const datatypes::VoltWatt& in, iso20_ac_VoltWattType& out) {
+    init_iso20_ac_VoltWattType(&out);
+    cb_convert_enum(in.power_reference, out.PowerReference);
+    convert(in.u_start, out.UStart);
+    convert(in.u_stop, out.UStop);
+    out.PT1ResponseActivePower = in.pt1_response_active_power;
+    convert(in.step_response_time_constant_active_power, out.StepResponseTimeConstantActivePower);
+    CPP2CB_ASSIGN_IF_USED(in.intentional_delay_power_control, out.IntentionalDelayPowerControl);
+}
+
+template <> void convert(const iso20_ac_FaultRideThroughType& in, datatypes::FaultRideThrough& out) {
+    convert(in.VoltageLimitStartFRT, out.voltage_limit_start_frt);
+    CB2CPP_CONVERT_IF_USED(in.VoltageLimitStopFRT, out.voltage_limit_stop_frt);
+    CB2CPP_CONVERT_IF_USED(in.VoltageRecoveryLimit, out.voltage_recovery_limit);
+    CB2CPP_CONVERT_IF_USED(in.VoltageRideThroughPositiveCurveKFactor,
+                           out.voltage_ride_through_positive_curve_k_factor);
+    CB2CPP_CONVERT_IF_USED(in.VoltageRideThroughNegativeCurveKFactor,
+                           out.voltage_ride_through_negative_curve_k_factor);
+    out.pt1_response_active_power = in.PT1ResponseActivePower;
+    convert(in.StepResponseTimeConstantActivePower, out.step_response_time_constant_active_power);
+    out.pt1_response_reactive_power = in.PT1ResponseReactivePower;
+    convert(in.StepResponseTimeConstantReactivePower, out.step_response_time_constant_reactive_power);
+}
+
+template <> void convert(const datatypes::FaultRideThrough& in, iso20_ac_FaultRideThroughType& out) {
+    init_iso20_ac_FaultRideThroughType(&out);
+    convert(in.voltage_limit_start_frt, out.VoltageLimitStartFRT);
+    CPP2CB_CONVERT_IF_USED(in.voltage_limit_stop_frt, out.VoltageLimitStopFRT);
+    CPP2CB_CONVERT_IF_USED(in.voltage_recovery_limit, out.VoltageRecoveryLimit);
+    CPP2CB_CONVERT_IF_USED(in.voltage_ride_through_positive_curve_k_factor,
+                           out.VoltageRideThroughPositiveCurveKFactor);
+    CPP2CB_CONVERT_IF_USED(in.voltage_ride_through_negative_curve_k_factor,
+                           out.VoltageRideThroughNegativeCurveKFactor);
+    out.PT1ResponseActivePower = in.pt1_response_active_power;
+    convert(in.step_response_time_constant_active_power, out.StepResponseTimeConstantActivePower);
+    out.PT1ResponseReactivePower = in.pt1_response_reactive_power;
+    convert(in.step_response_time_constant_reactive_power, out.StepResponseTimeConstantReactivePower);
+}
+
+template <> void convert(const iso20_ac_ZeroCurrentType& in, datatypes::ZeroCurrent& out) {
+    CB2CPP_CONVERT_IF_USED(in.OverVoltageLimit, out.over_voltage_limit);
+    CB2CPP_CONVERT_IF_USED(in.UnderVoltageLimit, out.under_voltage_limit);
+    CB2CPP_CONVERT_IF_USED(in.OverVoltageRecoveryLimit, out.over_voltage_recovery_limit);
+    CB2CPP_CONVERT_IF_USED(in.UnderVoltageRecoveryLimit, out.under_voltage_recovery_limit);
+    out.pt1_response_active_power = in.PT1ResponseActivePower;
+    convert(in.StepResponseTimeConstantActivePower, out.step_response_time_constant_active_power);
+    out.pt1_response_reactive_power = in.PT1ResponseReactivePower;
+    convert(in.StepResponseTimeConstantReactivePower, out.step_response_time_constant_reactive_power);
+}
+
+template <> void convert(const datatypes::ZeroCurrent& in, iso20_ac_ZeroCurrentType& out) {
+    init_iso20_ac_ZeroCurrentType(&out);
+    CPP2CB_CONVERT_IF_USED(in.over_voltage_limit, out.OverVoltageLimit);
+    CPP2CB_CONVERT_IF_USED(in.under_voltage_limit, out.UnderVoltageLimit);
+    CPP2CB_CONVERT_IF_USED(in.over_voltage_recovery_limit, out.OverVoltageRecoveryLimit);
+    CPP2CB_CONVERT_IF_USED(in.under_voltage_recovery_limit, out.UnderVoltageRecoveryLimit);
+    out.PT1ResponseActivePower = in.pt1_response_active_power;
+    convert(in.step_response_time_constant_active_power, out.StepResponseTimeConstantActivePower);
+    out.PT1ResponseReactivePower = in.pt1_response_reactive_power;
+    convert(in.step_response_time_constant_reactive_power, out.StepResponseTimeConstantReactivePower);
+}
+
+template <> void convert(const iso20_ac_ReactivePowerSupportType& in, datatypes::ReactivePowerSupport& out) {
+    CB2CPP_CONVERT_IF_USED(in.VoltVar, out.volt_var);
+    CB2CPP_CONVERT_IF_USED(in.WattVar, out.watt_var);
+    CB2CPP_CONVERT_IF_USED(in.WattCosPhi, out.watt_cos_phi);
+}
+
+template <> void convert(const datatypes::ReactivePowerSupport& in, iso20_ac_ReactivePowerSupportType& out) {
+    init_iso20_ac_ReactivePowerSupportType(&out);
+    CPP2CB_CONVERT_IF_USED(in.volt_var, out.VoltVar);
+    CPP2CB_CONVERT_IF_USED(in.watt_var, out.WattVar);
+    CPP2CB_CONVERT_IF_USED(in.watt_cos_phi, out.WattCosPhi);
+}
+
+template <> void convert(const iso20_ac_ActivePowerSupportType& in, datatypes::ActivePowerSupport& out) {
+    CB2CPP_CONVERT_IF_USED(in.UnderFrequencyWatt, out.under_frequency_watt);
+    CB2CPP_CONVERT_IF_USED(in.OverFrequencyWatt, out.over_frequency_watt);
+    CB2CPP_CONVERT_IF_USED(in.VoltWatt, out.volt_watt);
+}
+
+template <> void convert(const datatypes::ActivePowerSupport& in, iso20_ac_ActivePowerSupportType& out) {
+    init_iso20_ac_ActivePowerSupportType(&out);
+    CPP2CB_CONVERT_IF_USED(in.under_frequency_watt, out.UnderFrequencyWatt);
+    CPP2CB_CONVERT_IF_USED(in.over_frequency_watt, out.OverFrequencyWatt);
+    CPP2CB_CONVERT_IF_USED(in.volt_watt, out.VoltWatt);
+}
+
 template <> void convert(const iso20_ac_DERControlType& in, datatypes::DERControl& out) {
-    (void)in;
-    (void)out;
+    CB2CPP_CONVERT_IF_USED(in.OvervoltageFaultRideThrough, out.overvoltage_fault_ride_through);
+    CB2CPP_CONVERT_IF_USED(in.UndervoltageFaultRideThrough, out.undervoltage_fault_ride_through);
+    CB2CPP_CONVERT_IF_USED(in.ZeroCurrent, out.zero_current);
+    CB2CPP_CONVERT_IF_USED(in.ReactivePowerSupport, out.reactive_power_support);
+    CB2CPP_CONVERT_IF_USED(in.ActivePowerSupport, out.active_power_support);
+    CB2CPP_CONVERT_IF_USED(in.MaximumLevelDCInjection, out.maximum_level_dc_injection);
 }
 
 template <> void convert(const datatypes::DERControl& in, iso20_ac_DERControlType& out) {
-    (void)in;
     init_iso20_ac_DERControlType(&out);
+    CPP2CB_CONVERT_IF_USED(in.overvoltage_fault_ride_through, out.OvervoltageFaultRideThrough);
+    CPP2CB_CONVERT_IF_USED(in.undervoltage_fault_ride_through, out.UndervoltageFaultRideThrough);
+    CPP2CB_CONVERT_IF_USED(in.zero_current, out.ZeroCurrent);
+    CPP2CB_CONVERT_IF_USED(in.reactive_power_support, out.ReactivePowerSupport);
+    CPP2CB_CONVERT_IF_USED(in.active_power_support, out.ActivePowerSupport);
+    CPP2CB_CONVERT_IF_USED(in.maximum_level_dc_injection, out.MaximumLevelDCInjection);
 }
 
 template <>

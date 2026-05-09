@@ -10,9 +10,11 @@ namespace dt = message_20::datatypes;
 
 using AC_ModeReq = dt::AC_CPDReqEnergyTransferMode;
 using BPT_AC_ModeReq = dt::BPT_AC_CPDReqEnergyTransferMode;
+using DER_AC_ModeReq = dt::DER_AC_CPDReqEnergyTransferMode;
 
 using AC_ModeRes = dt::AC_CPDResEnergyTransferMode;
 using BPT_AC_ModeRes = dt::BPT_AC_CPDResEnergyTransferMode;
+using DER_AC_ModeRes = dt::DER_AC_CPDResEnergyTransferMode;
 
 SCENARIO("AC charge parameter discovery state handling") {
     GIVEN("Bad Case - Unknown session") {
@@ -276,6 +278,53 @@ SCENARIO("AC charge parameter discovery state handling") {
             REQUIRE(dt::from_RationalNumber(transfer_mode.power_ramp_limitation.value()) == power_ramp_limitation);
             REQUIRE(dt::from_RationalNumber(transfer_mode.max_discharge_power) == max_discharge_power);
             REQUIRE(dt::from_RationalNumber(transfer_mode.min_discharge_power) == min_discharge_power);
+        }
+    }
+
+    GIVEN("Good Case: AC_DER") {
+        dt::DERControlFunctions der_control_functions;
+        der_control_functions.volt_watt = true;
+        der_control_functions.dso_q_setpoint_provision = true;
+
+        const auto service_parameters = d20::SelectedServiceParameters(
+            dt::ServiceCategory::AC_DER, dt::AcConnector::ThreePhase, dt::ControlMode::Dynamic,
+            dt::MobilityNeedsMode::ProvidedByEvcc, dt::Pricing::NoPricing, dt::BptChannel::Unified,
+            dt::GeneratorMode::GridFollowing, 230, dt::GridCodeIslandingDetectionMethod::Passive,
+            der_control_functions);
+
+        auto session = d20::Session(service_parameters);
+
+        auto limits = d20::AcTransferLimits{};
+        limits.charge_power.max = dt::from_float(11000.0f);
+        limits.charge_power.min = dt::from_float(1000.0f);
+        limits.nominal_frequency = dt::from_float(50.0f);
+        limits.discharge_power = d20::Limit<dt::RationalNumber>{dt::from_float(6000.0f), dt::from_float(1000.0f)};
+
+        message_20::AC_ChargeParameterDiscoveryRequest req;
+        req.header.session_id = session.get_id();
+        req.header.timestamp = 1691411798;
+
+        auto& req_out = req.transfer_mode.emplace<DER_AC_ModeReq>();
+        req_out.max_charge_power = {11, 3};
+        req_out.min_charge_power = {1, 3};
+        req_out.max_discharge_power = {6, 3};
+        req_out.min_discharge_power = {1, 3};
+        req_out.processing = dt::Processing::Finished;
+
+        const auto res = d20::state::handle_request(req, session, limits, iso15118::d20::AcPresentPower{});
+
+        THEN("ResponseCode: OK and DER AC transfer mode is returned") {
+            REQUIRE(res.response_code == dt::ResponseCode::OK);
+            REQUIRE(std::holds_alternative<DER_AC_ModeRes>(res.transfer_mode));
+
+            const auto& transfer_mode = std::get<DER_AC_ModeRes>(res.transfer_mode);
+            REQUIRE(dt::from_RationalNumber(transfer_mode.max_charge_power) == 11000.0f);
+            REQUIRE(dt::from_RationalNumber(transfer_mode.max_discharge_power) == 6000.0f);
+            REQUIRE(dt::from_RationalNumber(transfer_mode.nominal_charge_power) == 11000.0f);
+            REQUIRE(dt::from_RationalNumber(transfer_mode.nominal_discharge_power) == 6000.0f);
+            REQUIRE(transfer_mode.operating_mode == dt::EVOperatingMode::GridFollowing);
+            REQUIRE(transfer_mode.grid_connection_mode == dt::GridConnectionMode::GridConnected);
+            REQUIRE(transfer_mode.der_control.maximum_level_dc_injection.has_value());
         }
     }
 

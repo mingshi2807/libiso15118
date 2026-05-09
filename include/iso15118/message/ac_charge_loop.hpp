@@ -42,6 +42,7 @@ struct DER_Scheduled_AC_CLReqControlMode : BPT_Scheduled_AC_CLReqControlMode {
     std::optional<RationalNumber> max_discharge_reactive_power;
     std::optional<RationalNumber> max_discharge_reactive_power_L2;
     std::optional<RationalNumber> max_discharge_reactive_power_L3;
+    uint8_t grid_event_condition{0};
 };
 
 struct Dynamic_AC_CLReqControlMode : Dynamic_CLReqControlMode {

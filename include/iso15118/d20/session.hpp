@@ -28,6 +28,7 @@ struct OfferedServices {
 
     std::map<uint8_t, dt::AcParameterList> ac_parameter_list;
     std::map<uint8_t, dt::AcBptParameterList> ac_bpt_parameter_list;
+    std::map<uint8_t, dt::AcDerParameterList> ac_der_parameter_list;
     std::map<uint8_t, dt::DcParameterList> dc_parameter_list;
     std::map<uint8_t, dt::DcBptParameterList> dc_bpt_parameter_list;
     std::map<uint8_t, dt::McsParameterList> mcs_parameter_list;
@@ -49,6 +50,7 @@ struct SelectedServiceParameters {
     // BPT
     std::optional<dt::BptChannel> selected_bpt_channel;
     std::optional<dt::GeneratorMode> selected_generator_mode;
+    std::optional<dt::DERControlFunctions> selected_der_control_functions;
 
     // AC specific
     std::optional<float> evse_nominal_voltage;
@@ -72,6 +74,11 @@ struct SelectedServiceParameters {
                               dt::ControlMode control_mode_, dt::MobilityNeedsMode mobility_, dt::Pricing pricing_,
                               dt::BptChannel channel_, dt::GeneratorMode generator_, float nominal_voltage_,
                               dt::GridCodeIslandingDetectionMethod grid_code_method_);
+    SelectedServiceParameters(dt::ServiceCategory energy_service_, dt::AcConnector ac_connector_,
+                              dt::ControlMode control_mode_, dt::MobilityNeedsMode mobility_, dt::Pricing pricing_,
+                              dt::BptChannel channel_, dt::GeneratorMode generator_, float nominal_voltage_,
+                              dt::GridCodeIslandingDetectionMethod grid_code_method_,
+                              dt::DERControlFunctions control_functions_);
 };
 
 // Todo(sl): missing services
@@ -124,7 +131,8 @@ public:
 
     bool is_ac_charger() const {
         return selected_services.selected_energy_service == dt::ServiceCategory::AC or
-               selected_services.selected_energy_service == dt::ServiceCategory::AC_BPT;
+               selected_services.selected_energy_service == dt::ServiceCategory::AC_BPT or
+               selected_services.selected_energy_service == dt::ServiceCategory::AC_DER;
     }
 
     bool is_dc_charger() const {

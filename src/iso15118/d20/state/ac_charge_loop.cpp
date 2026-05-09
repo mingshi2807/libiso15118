@@ -17,13 +17,17 @@ namespace dt = message_20::datatypes;
 
 using Scheduled_AC_Req = dt::Scheduled_AC_CLReqControlMode;
 using Scheduled_BPT_AC_Req = dt::BPT_Scheduled_AC_CLReqControlMode;
+using Scheduled_DER_AC_Req = dt::DER_Scheduled_AC_CLReqControlMode;
 using Dynamic_AC_Req = dt::Dynamic_AC_CLReqControlMode;
 using Dynamic_BPT_AC_Req = dt::BPT_Dynamic_AC_CLReqControlMode;
+using Dynamic_DER_AC_Req = dt::DER_Dynamic_AC_CLReqControlMode;
 
 using Scheduled_AC_Res = dt::Scheduled_AC_CLResControlMode;
 using Scheduled_BPT_AC_Res = dt::BPT_Scheduled_AC_CLResControlMode;
+using Scheduled_DER_AC_Res = dt::DER_Scheduled_AC_CLResControlMode;
 using Dynamic_AC_Res = dt::Dynamic_AC_CLResControlMode;
 using Dynamic_BPT_AC_Res = dt::BPT_Dynamic_AC_CLResControlMode;
+using Dynamic_DER_AC_Res = dt::DER_Dynamic_AC_CLResControlMode;
 
 template <typename Out> void convert(Out& out, const AcTargetPower& targets, const d20::AcPresentPower& present_power);
 
@@ -63,6 +67,42 @@ void convert(Dynamic_BPT_AC_Res& out, const AcTargetPower& targets, const d20::A
     convert(static_cast<Dynamic_AC_Res&>(out), targets, present_power);
 }
 
+void fill_der_power_limits(Scheduled_DER_AC_Res& out, const d20::AcTransferLimits& limits) {
+    out.max_charge_power = limits.charge_power.max;
+    out.max_discharge_power = limits.discharge_power.has_value() ? limits.discharge_power.value().max
+                                                                 : dt::RationalNumber{0, 0};
+    if (limits.charge_power_L2.has_value()) {
+        out.max_charge_power_L2 = limits.charge_power_L2.value().max;
+    }
+    if (limits.charge_power_L3.has_value()) {
+        out.max_charge_power_L3 = limits.charge_power_L3.value().max;
+    }
+    if (limits.discharge_power_L2.has_value()) {
+        out.max_discharge_power_L2 = limits.discharge_power_L2.value().max;
+    }
+    if (limits.discharge_power_L3.has_value()) {
+        out.max_discharge_power_L3 = limits.discharge_power_L3.value().max;
+    }
+}
+
+void fill_der_power_limits(Dynamic_DER_AC_Res& out, const d20::AcTransferLimits& limits) {
+    out.max_charge_power = limits.charge_power.max;
+    out.max_discharge_power = limits.discharge_power.has_value() ? limits.discharge_power.value().max
+                                                                 : dt::RationalNumber{0, 0};
+    if (limits.charge_power_L2.has_value()) {
+        out.max_charge_power_L2 = limits.charge_power_L2.value().max;
+    }
+    if (limits.charge_power_L3.has_value()) {
+        out.max_charge_power_L3 = limits.charge_power_L3.value().max;
+    }
+    if (limits.discharge_power_L2.has_value()) {
+        out.max_discharge_power_L2 = limits.discharge_power_L2.value().max;
+    }
+    if (limits.discharge_power_L3.has_value()) {
+        out.max_discharge_power_L3 = limits.discharge_power_L3.value().max;
+    }
+}
+
 // TODO(sl): Refactor with DcChargeLoop state
 namespace {
 template <typename T>
@@ -82,8 +122,8 @@ void set_dynamic_parameters_in_res(T& res_mode, const UpdateDynamicModeParameter
 
 message_20::AC_ChargeLoopResponse handle_request(const message_20::AC_ChargeLoopRequest& req,
                                                  const d20::Session& session, bool stop, bool pause,
-                                                 float target_frequency, const AcTargetPower& target_powers,
-                                                 const AcPresentPower& present_powers,
+                                                 float target_frequency, const d20::AcTransferLimits& ac_limits,
+                                                 const AcTargetPower& target_powers, const AcPresentPower& present_powers,
                                                  const UpdateDynamicModeParameters& dynamic_parameters) {
 
     message_20::AC_ChargeLoopResponse res;
@@ -120,6 +160,17 @@ message_20::AC_ChargeLoopResponse handle_request(const message_20::AC_ChargeLoop
         auto& res_mode = res.control_mode.emplace<Scheduled_BPT_AC_Res>();
         convert(res_mode, target_powers, present_powers);
 
+    } else if (std::holds_alternative<Scheduled_DER_AC_Req>(req.control_mode)) {
+
+        if (selected_control_mode != dt::ControlMode::Scheduled or
+            selected_energy_service != dt::ServiceCategory::AC_DER) {
+            return response_with_code(res, dt::ResponseCode::FAILED);
+        }
+
+        auto& res_mode = res.control_mode.emplace<Scheduled_DER_AC_Res>();
+        convert(static_cast<Scheduled_AC_Res&>(res_mode), target_powers, present_powers);
+        fill_der_power_limits(res_mode, ac_limits);
+
     } else if (std::holds_alternative<Dynamic_AC_Req>(req.control_mode)) {
 
         // If the ev sends a false control mode or a false energy service other than the previous selected ones, then
@@ -150,6 +201,19 @@ message_20::AC_ChargeLoopResponse handle_request(const message_20::AC_ChargeLoop
         if (selected_mobility_needs_mode == dt::MobilityNeedsMode::ProvidedBySecc) {
             set_dynamic_parameters_in_res(res_mode, dynamic_parameters, res.header.timestamp);
         }
+    } else if (std::holds_alternative<Dynamic_DER_AC_Req>(req.control_mode)) {
+
+        if (selected_control_mode != dt::ControlMode::Dynamic or selected_energy_service != dt::ServiceCategory::AC_DER) {
+            return response_with_code(res, dt::ResponseCode::FAILED);
+        }
+
+        auto& res_mode = res.control_mode.emplace<Dynamic_DER_AC_Res>();
+        convert(static_cast<Dynamic_AC_Res&>(res_mode), target_powers, present_powers);
+        fill_der_power_limits(res_mode, ac_limits);
+
+        if (selected_mobility_needs_mode == dt::MobilityNeedsMode::ProvidedBySecc) {
+            set_dynamic_parameters_in_res(res_mode, dynamic_parameters, res.header.timestamp);
+        }
     }
 
     res.target_frequency = dt::from_float(target_frequency);
@@ -165,6 +229,19 @@ message_20::AC_ChargeLoopResponse handle_request(const message_20::AC_ChargeLoop
     }
 
     return response_with_code(res, dt::ResponseCode::OK);
+}
+
+message_20::AC_ChargeLoopResponse handle_request(const message_20::AC_ChargeLoopRequest& req,
+                                                 const d20::Session& session, bool stop, bool pause,
+                                                 float target_frequency, const AcTargetPower& target_powers,
+                                                 const AcPresentPower& present_powers,
+                                                 const UpdateDynamicModeParameters& dynamic_parameters) {
+    const auto zero = dt::RationalNumber{0, 0};
+    const d20::AcTransferLimits fallback_limits{{zero, zero}, std::nullopt, std::nullopt, zero,
+                                                std::nullopt,  std::nullopt, std::nullopt, std::nullopt,
+                                                std::nullopt};
+    return handle_request(req, session, stop, pause, target_frequency, fallback_limits, target_powers, present_powers,
+                          dynamic_parameters);
 }
 
 void AC_ChargeLoop::enter() {
@@ -223,7 +300,7 @@ Result AC_ChargeLoop::feed(Event ev) {
             first_entry_in_charge_loop = false;
         }
 
-        const auto res = handle_request(*req, m_ctx.session, stop, pause, target_frequency, target_powers,
+        const auto res = handle_request(*req, m_ctx.session, stop, pause, target_frequency, m_ctx.session_config.ac_limits, target_powers,
                                         present_powers, dynamic_parameters);
 
         m_ctx.respond(res);

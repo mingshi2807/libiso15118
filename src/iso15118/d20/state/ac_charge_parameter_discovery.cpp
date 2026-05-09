@@ -14,9 +14,11 @@ namespace dt = message_20::datatypes;
 
 using AC_ModeReq = dt::AC_CPDReqEnergyTransferMode;
 using BPT_AC_ModeReq = dt::BPT_AC_CPDReqEnergyTransferMode;
+using DER_AC_ModeReq = dt::DER_AC_CPDReqEnergyTransferMode;
 
 using AC_ModeRes = dt::AC_CPDResEnergyTransferMode;
 using BPT_AC_ModeRes = dt::BPT_AC_CPDResEnergyTransferMode;
+using DER_AC_ModeRes = dt::DER_AC_CPDResEnergyTransferMode;
 
 template <typename Out>
 void convert(Out& out, const d20::AcTransferLimits& limits, const d20::AcPresentPower& present_power);
@@ -64,6 +66,39 @@ void convert(BPT_AC_ModeRes& out, const d20::AcTransferLimits& limits, const d20
     }
 }
 
+template <>
+void convert(DER_AC_ModeRes& out, const d20::AcTransferLimits& limits, const d20::AcPresentPower& present_power) {
+    convert(static_cast<AC_ModeRes&>(out), limits, present_power);
+
+    out.nominal_charge_power = limits.charge_power.max;
+    if (limits.charge_power_L2.has_value()) {
+        out.nominal_charge_power_L2 = limits.charge_power_L2.value().max;
+    }
+    if (limits.charge_power_L3.has_value()) {
+        out.nominal_charge_power_L3 = limits.charge_power_L3.value().max;
+    }
+
+    if (limits.discharge_power.has_value()) {
+        out.nominal_discharge_power = limits.discharge_power.value().max;
+        out.max_discharge_power = limits.discharge_power.value().max;
+    } else {
+        out.nominal_discharge_power = dt::RationalNumber{0, 0};
+        out.max_discharge_power = dt::RationalNumber{0, 0};
+    }
+    if (limits.discharge_power_L2.has_value()) {
+        out.nominal_discharge_power_L2 = limits.discharge_power_L2.value().max;
+        out.max_discharge_power_L2 = limits.discharge_power_L2.value().max;
+    }
+    if (limits.discharge_power_L3.has_value()) {
+        out.nominal_discharge_power_L3 = limits.discharge_power_L3.value().max;
+        out.max_discharge_power_L3 = limits.discharge_power_L3.value().max;
+    }
+
+    out.operating_mode = dt::EVOperatingMode::GridFollowing;
+    out.grid_connection_mode = dt::GridConnectionMode::GridConnected;
+    out.der_control.maximum_level_dc_injection = dt::RationalNumber{0, 0};
+}
+
 message_20::AC_ChargeParameterDiscoveryResponse
 handle_request(const message_20::AC_ChargeParameterDiscoveryRequest& req, const d20::Session& session,
                const d20::AcTransferLimits& limits, const d20::AcPresentPower& powers) {
@@ -90,6 +125,14 @@ handle_request(const message_20::AC_ChargeParameterDiscoveryRequest& req, const 
         }
 
         auto& mode = res.transfer_mode.emplace<BPT_AC_ModeRes>();
+        convert(mode, limits, powers);
+
+    } else if (std::holds_alternative<DER_AC_ModeReq>(req.transfer_mode)) {
+        if (selected_energy_service != message_20::datatypes::ServiceCategory::AC_DER) {
+            return response_with_code(res, message_20::datatypes::ResponseCode::FAILED_WrongChargeParameter);
+        }
+
+        auto& mode = res.transfer_mode.emplace<DER_AC_ModeRes>();
         convert(mode, limits, powers);
 
     } else {
@@ -127,6 +170,9 @@ Result AC_ChargeParameterDiscovery::feed(Event ev) {
         } else if (const auto* mode = std::get_if<BPT_AC_ModeReq>(&req->transfer_mode)) {
             // Set EV transfer limits
             m_ctx.session_ev_info.ev_transfer_limits.emplace<BPT_AC_ModeReq>(*mode);
+        } else if (const auto* mode = std::get_if<DER_AC_ModeReq>(&req->transfer_mode)) {
+            // Set EV transfer limits
+            m_ctx.session_ev_info.ev_transfer_limits.emplace<DER_AC_ModeReq>(*mode);
         }
 
         const auto res = handle_request(*req, m_ctx.session, m_ctx.session_config.ac_limits, present_powers);

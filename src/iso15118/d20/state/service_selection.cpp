@@ -141,7 +141,8 @@ Result ServiceSelection::feed(Event ev) {
             message_20::to_underlying_value(Service::AC),         message_20::to_underlying_value(Service::DC),
             message_20::to_underlying_value(Service::WPT),        message_20::to_underlying_value(Service::DC_ACDP),
             message_20::to_underlying_value(Service::AC_BPT),     message_20::to_underlying_value(Service::DC_BPT),
-            message_20::to_underlying_value(Service::DC_ACDP_BPT)};
+            message_20::to_underlying_value(Service::DC_ACDP_BPT), message_20::to_underlying_value(Service::MCS),
+            message_20::to_underlying_value(Service::MCS_BPT),     message_20::to_underlying_value(Service::AC_DER)};
 
         std::optional<dt::ServiceParameterList> custom_vas_parameters{std::nullopt};
 
@@ -203,7 +204,7 @@ Result ServiceSelection::feed(Event ev) {
         if (m_ctx.session.is_dc_charger()) {
             return m_ctx.create_state<DC_ChargeParameterDiscovery>();
         }
-        m_ctx.log("expected selected_energy_service AC, AC_BPT, DC, DC_BPT! But code type id: %d",
+        m_ctx.log("expected selected_energy_service AC, AC_BPT, AC_DER, DC, DC_BPT, MCS or MCS_BPT! But code type id: %d",
                   static_cast<int>(selected_energy_service));
 
         m_ctx.session_stopped = true;

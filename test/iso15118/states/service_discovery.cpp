@@ -186,6 +186,38 @@ SCENARIO("Service discovery state handling") {
         }
     }
 
+    GIVEN("Good Case - Filter AC_DER supported_service_ids") {
+
+        d20::Session session = d20::Session();
+
+        message_20::ServiceDiscoveryRequest req;
+        req.header.session_id = session.get_id();
+        req.header.timestamp = 1691411798;
+
+        auto& supported_service_ids = req.supported_service_ids.emplace();
+        supported_service_ids.push_back(10);
+
+        std::vector<dt::ServiceCategory> supported_energy_transfer_services = {dt::ServiceCategory::AC,
+                                                                               dt::ServiceCategory::AC_DER};
+        std::vector<dt::ServiceCategory> ev_energy_services{};
+
+        const auto res =
+            d20::state::handle_request(req, session, supported_energy_transfer_services, {}, ev_energy_services);
+
+        THEN("ResponseCode: OK, energy_transfer_service_list: AC_DER, vaslist: empty") {
+            REQUIRE(res.response_code == dt::ResponseCode::OK);
+            REQUIRE(res.service_renegotiation_supported == false);
+            REQUIRE(res.energy_transfer_service_list.size() == 1);
+            REQUIRE(res.energy_transfer_service_list[0].free_service == false);
+            REQUIRE(res.energy_transfer_service_list[0].service_id == dt::ServiceCategory::AC_DER);
+            REQUIRE(res.vas_list.has_value() == false);
+            REQUIRE(ev_energy_services.size() == 1);
+            REQUIRE(ev_energy_services[0] == dt::ServiceCategory::AC_DER);
+            REQUIRE(session.offered_services.energy_services.size() == 1);
+            REQUIRE(session.offered_services.energy_services[0] == dt::ServiceCategory::AC_DER);
+        }
+    }
+
     // [V2G20-1644]
     GIVEN("Good case - Resuming secc shall provide the same service ids and parameter set ids "
           "(ServiceRenegotiationSupported: false)") {

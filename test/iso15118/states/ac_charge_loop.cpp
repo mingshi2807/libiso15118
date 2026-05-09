@@ -12,13 +12,17 @@ namespace dt = message_20::datatypes;
 
 using Scheduled_AC_Req = dt::Scheduled_AC_CLReqControlMode;
 using Scheduled_BPT_AC_Req = dt::BPT_Scheduled_AC_CLReqControlMode;
+using Scheduled_DER_AC_Req = dt::DER_Scheduled_AC_CLReqControlMode;
 using Dynamic_AC_Req = dt::Dynamic_AC_CLReqControlMode;
 using Dynamic_BPT_AC_Req = dt::BPT_Dynamic_AC_CLReqControlMode;
+using Dynamic_DER_AC_Req = dt::DER_Dynamic_AC_CLReqControlMode;
 
 using Scheduled_AC_Res = dt::Scheduled_AC_CLResControlMode;
 using Scheduled_BPT_AC_Res = dt::BPT_Scheduled_AC_CLResControlMode;
+using Scheduled_DER_AC_Res = dt::DER_Scheduled_AC_CLResControlMode;
 using Dynamic_AC_Res = dt::Dynamic_AC_CLResControlMode;
 using Dynamic_BPT_AC_Res = dt::BPT_Dynamic_AC_CLResControlMode;
+using Dynamic_DER_AC_Res = dt::DER_Dynamic_AC_CLResControlMode;
 
 SCENARIO("AC charge loop state handling") {
 
@@ -287,6 +291,58 @@ SCENARIO("AC charge loop state handling") {
             REQUIRE(dt::from_RationalNumber(res_control_mode.present_active_power.value_or(dt::RationalNumber{0, 0})) ==
                     11000.0f);
             REQUIRE(dt::from_RationalNumber(res_control_mode.target_active_power) == 11000.0f);
+        }
+    }
+
+    GIVEN("Good case - AC_DER dynamic mode") {
+        dt::DERControlFunctions der_control_functions;
+        der_control_functions.volt_watt = true;
+        der_control_functions.dso_q_setpoint_provision = true;
+        der_control_functions.dso_cos_phi_setpoint_provision = true;
+
+        d20::SelectedServiceParameters service_parameters = d20::SelectedServiceParameters(
+            dt::ServiceCategory::AC_DER, dt::AcConnector::ThreePhase, dt::ControlMode::Dynamic,
+            dt::MobilityNeedsMode::ProvidedByEvcc, dt::Pricing::NoPricing, dt::BptChannel::Unified,
+            dt::GeneratorMode::GridFollowing, 230, dt::GridCodeIslandingDetectionMethod::Passive,
+            der_control_functions);
+
+        d20::Session session = d20::Session(service_parameters);
+        message_20::AC_ChargeLoopRequest req;
+        req.header.session_id = session.get_id();
+        req.header.timestamp = 1691411798;
+
+        auto& req_control_mode = req.control_mode.emplace<Dynamic_DER_AC_Req>();
+        req_control_mode.target_energy_request = {22, 3};
+        req_control_mode.max_energy_request = {30, 3};
+        req_control_mode.min_energy_request = {10, 3};
+        req_control_mode.max_charge_power = {22, 3};
+        req_control_mode.min_charge_power = {4, 0};
+        req_control_mode.present_active_power = {11, 3};
+        req_control_mode.present_reactive_power = {10, 0};
+        req_control_mode.max_discharge_power = {11, 3};
+        req_control_mode.min_discharge_power = {4, 0};
+        req_control_mode.max_charge_reactive_power = {2, 3};
+        req_control_mode.max_discharge_reactive_power = {2, 3};
+        req_control_mode.grid_event_condition = 1;
+
+        req.meter_info_requested = false;
+
+        auto ac_target_power = d20::AcTargetPower{};
+        ac_target_power.target_active_power = {11, 3};
+        auto ac_present_power = d20::AcPresentPower{};
+        ac_present_power.present_active_power = {11, 3};
+
+        const auto res = d20::state::handle_request(req, session, false, false, 50, ac_limits, ac_target_power,
+                                                    ac_present_power, d20::UpdateDynamicModeParameters());
+
+        THEN("ResponseCode: OK and DER control mode should be selected") {
+            REQUIRE(res.response_code == dt::ResponseCode::OK);
+            REQUIRE(std::holds_alternative<Dynamic_DER_AC_Res>(res.control_mode));
+
+            const auto& res_control_mode = std::get<Dynamic_DER_AC_Res>(res.control_mode);
+            REQUIRE(dt::from_RationalNumber(res_control_mode.target_active_power) == 11000.0f);
+            REQUIRE(dt::from_RationalNumber(res_control_mode.max_charge_power) == 22000.0f);
+            REQUIRE(dt::from_RationalNumber(res_control_mode.max_discharge_power) == 11000.0f);
         }
     }
 

@@ -160,6 +160,46 @@ SCENARIO("Service selection state handling") {
         }
     }
 
+    GIVEN("Good case - AC_DER") {
+        d20::Session session = d20::Session();
+
+        dt::DERControlFunctions der_control_functions;
+        der_control_functions.volt_watt = true;
+        der_control_functions.dso_q_setpoint_provision = true;
+        der_control_functions.standard_bitmap = 0x3f;
+        der_control_functions.extended_bitmap = 0x3f;
+
+        session.offered_services.energy_services = {dt::ServiceCategory::AC_DER};
+        session.offered_services.ac_der_parameter_list[0] = {{{dt::AcConnector::ThreePhase,
+                                                               dt::ControlMode::Dynamic,
+                                                               dt::MobilityNeedsMode::ProvidedByEvcc,
+                                                               230,
+                                                               dt::Pricing::NoPricing},
+                                                              dt::BptChannel::Unified,
+                                                              dt::GeneratorMode::GridFollowing,
+                                                              dt::GridCodeIslandingDetectionMethod::Passive},
+                                                             der_control_functions};
+
+        message_20::ServiceSelectionRequest req;
+        req.header.session_id = session.get_id();
+        req.header.timestamp = 1691411798;
+        req.selected_energy_transfer_service.service_id = dt::ServiceCategory::AC_DER;
+        req.selected_energy_transfer_service.parameter_set_id = 0;
+
+        const auto res = d20::state::handle_request(req, session);
+
+        THEN("ResponseCode: OK and DER parameters are selected") {
+            REQUIRE(res.response_code == dt::ResponseCode::OK);
+
+            const auto selected_services = session.get_selected_services();
+            REQUIRE(selected_services.selected_energy_service == dt::ServiceCategory::AC_DER);
+            REQUIRE(selected_services.selected_control_mode == dt::ControlMode::Dynamic);
+            REQUIRE(selected_services.selected_der_control_functions.has_value());
+            REQUIRE(selected_services.selected_der_control_functions->volt_watt);
+            REQUIRE(selected_services.selected_der_control_functions->dso_q_setpoint_provision);
+        }
+    }
+
     GIVEN("Bad case: selected_vas_list false service id - FAILED_ServiceSelectionInvalid") {
         d20::Session session = d20::Session();
 

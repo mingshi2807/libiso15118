@@ -56,6 +56,7 @@ struct SessionConfig {
 
     std::vector<message_20::datatypes::AcParameterList> ac_parameter_list;
     std::vector<message_20::datatypes::AcBptParameterList> ac_bpt_parameter_list;
+    std::vector<message_20::datatypes::AcDerParameterList> ac_der_parameter_list;
     std::vector<message_20::datatypes::DcParameterList> dc_parameter_list;
     std::vector<message_20::datatypes::DcBptParameterList> dc_bpt_parameter_list;
 

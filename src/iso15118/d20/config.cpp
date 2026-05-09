@@ -70,6 +70,53 @@ auto get_default_ac_bpt_parameter_list(const std::vector<ControlMobilityNeedsMod
     return param_list;
 }
 
+auto get_default_der_control_functions() {
+    dt::DERControlFunctions control_functions;
+
+    control_functions.volt_watt = true;
+    control_functions.dso_q_setpoint_provision = true;
+    control_functions.dso_cos_phi_setpoint_provision = true;
+    control_functions.dc_injection_restriction = true;
+    control_functions.under_frequency_watt = true;
+    control_functions.over_frequency_watt = true;
+    control_functions.volt_var = true;
+    control_functions.watt_var = true;
+    control_functions.watt_cos_phi = true;
+    control_functions.over_voltage_fault_ride_through = true;
+    control_functions.under_voltage_fault_ride_through = true;
+    control_functions.zero_current = true;
+
+    control_functions.standard_bitmap =
+        (1u << 0) | (1u << 1) | (1u << 2) | (1u << 3) | (1u << 4) | (1u << 5);
+    control_functions.extended_bitmap = (1u << 0) | (1u << 1) | (1u << 2) | (1u << 3) | (1u << 4) | (1u << 5);
+
+    return control_functions;
+}
+
+auto get_default_ac_der_parameter_list(const std::vector<ControlMobilityNeedsModes>& control_mobility_modes,
+                                       const AcSetupConfig& ac_setup_config, const BptSetupConfig& bpt_setup_config) {
+    using namespace dt;
+
+    std::vector<AcDerParameterList> param_list;
+
+    for (const auto& mode : control_mobility_modes) {
+        for (const auto& connector : ac_setup_config.connectors) {
+            param_list.push_back({{{connector,
+                                    mode.control_mode,
+                                    get_mobility_needs_mode(mode),
+                                    ac_setup_config.voltage,
+                                    Pricing::NoPricing},
+                                   bpt_setup_config.bpt_channel,
+                                   bpt_setup_config.generator_mode,
+                                   bpt_setup_config.grid_code_detection_method.value_or(
+                                       dt::GridCodeIslandingDetectionMethod::Passive)},
+                                  get_default_der_control_functions()});
+        }
+    }
+
+    return param_list;
+}
+
 auto get_default_dc_parameter_list(const std::vector<ControlMobilityNeedsModes>& control_mobility_modes) {
     using namespace dt;
 
@@ -199,6 +246,8 @@ SessionConfig::SessionConfig(EvseSetupConfig config) :
     ac_parameter_list = get_default_ac_parameter_list(supported_control_mobility_modes, ac_setup_config);
     ac_bpt_parameter_list =
         get_default_ac_bpt_parameter_list(supported_control_mobility_modes, ac_setup_config, ac_bpt_setup_config);
+    ac_der_parameter_list =
+        get_default_ac_der_parameter_list(supported_control_mobility_modes, ac_setup_config, ac_bpt_setup_config);
 
     dc_parameter_list = get_default_dc_parameter_list(supported_control_mobility_modes);
     dc_bpt_parameter_list = get_default_dc_bpt_parameter_list(supported_control_mobility_modes, dc_bpt_setup_config);
