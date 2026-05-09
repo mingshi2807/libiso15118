@@ -37,7 +37,8 @@ template <typename InType> void convert(const InType& in, datatypes::Scheduled_C
 
 template <typename InType> void convert(const InType& in, datatypes::Scheduled_AC_CLReqControlMode& out) {
     static_assert(std::is_same_v<InType, iso20_ac_Scheduled_AC_CLReqControlModeType> or
-                  std::is_same_v<InType, iso20_ac_BPT_Scheduled_AC_CLReqControlModeType>);
+                  std::is_same_v<InType, iso20_ac_BPT_Scheduled_AC_CLReqControlModeType> or
+                  std::is_same_v<InType, iso20_ac_DER_Scheduled_AC_CLReqControlModeType>);
     convert(in, static_cast<datatypes::Scheduled_CLReqControlMode&>(out));
 
     CB2CPP_CONVERT_IF_USED(in.EVMaximumChargePower, out.max_charge_power);
@@ -55,6 +56,18 @@ template <typename InType> void convert(const InType& in, datatypes::Scheduled_A
     CB2CPP_CONVERT_IF_USED(in.EVPresentReactivePower, out.present_reactive_power);
     CB2CPP_CONVERT_IF_USED(in.EVPresentReactivePower_L2, out.present_reactive_power_L2);
     CB2CPP_CONVERT_IF_USED(in.EVPresentReactivePower_L3, out.present_reactive_power_L3);
+}
+
+template <>
+void convert(const struct iso20_ac_DER_Scheduled_AC_CLReqControlModeType& in,
+             datatypes::DER_Scheduled_AC_CLReqControlMode& out) {
+    convert(in, static_cast<datatypes::BPT_Scheduled_AC_CLReqControlMode&>(out));
+    CB2CPP_CONVERT_IF_USED(in.EVMaximumChargeReactivePower, out.max_charge_reactive_power);
+    CB2CPP_CONVERT_IF_USED(in.EVMaximumChargeReactivePower_L2, out.max_charge_reactive_power_L2);
+    CB2CPP_CONVERT_IF_USED(in.EVMaximumChargeReactivePower_L3, out.max_charge_reactive_power_L3);
+    CB2CPP_CONVERT_IF_USED(in.EVMaximumDischargeReactivePower, out.max_discharge_reactive_power);
+    CB2CPP_CONVERT_IF_USED(in.EVMaximumDischargeReactivePower_L2, out.max_discharge_reactive_power_L2);
+    CB2CPP_CONVERT_IF_USED(in.EVMaximumDischargeReactivePower_L3, out.max_discharge_reactive_power_L3);
 }
 
 template <>
@@ -81,7 +94,8 @@ template <typename InType> void convert(const InType& in, datatypes::Dynamic_CLR
 
 template <typename InType> void convert(const InType& in, datatypes::Dynamic_AC_CLReqControlMode& out) {
     static_assert(std::is_same_v<InType, iso20_ac_Dynamic_AC_CLReqControlModeType> or
-                  std::is_same_v<InType, iso20_ac_BPT_Dynamic_AC_CLReqControlModeType>);
+                  std::is_same_v<InType, iso20_ac_BPT_Dynamic_AC_CLReqControlModeType> or
+                  std::is_same_v<InType, iso20_ac_DER_Dynamic_AC_CLReqControlModeType>);
     convert(in, static_cast<datatypes::Dynamic_CLReqControlMode&>(out));
 
     convert(in.EVMaximumChargePower, out.max_charge_power);
@@ -118,6 +132,21 @@ void convert(const struct iso20_ac_BPT_Dynamic_AC_CLReqControlModeType& in,
     CB2CPP_CONVERT_IF_USED(in.EVMinimumV2XEnergyRequest, out.min_v2x_energy_request);
 }
 
+template <>
+void convert(const struct iso20_ac_DER_Dynamic_AC_CLReqControlModeType& in,
+             datatypes::DER_Dynamic_AC_CLReqControlMode& out) {
+    convert(in, static_cast<datatypes::BPT_Dynamic_AC_CLReqControlMode&>(out));
+    CB2CPP_CONVERT_IF_USED(in.EVMaximumChargeReactivePower, out.max_charge_reactive_power);
+    CB2CPP_CONVERT_IF_USED(in.EVMaximumChargeReactivePower_L2, out.max_charge_reactive_power_L2);
+    CB2CPP_CONVERT_IF_USED(in.EVMaximumChargeReactivePower_L3, out.max_charge_reactive_power_L3);
+    CB2CPP_CONVERT_IF_USED(in.EVMaximumDischargeReactivePower, out.max_discharge_reactive_power);
+    CB2CPP_CONVERT_IF_USED(in.EVMaximumDischargeReactivePower_L2, out.max_discharge_reactive_power_L2);
+    CB2CPP_CONVERT_IF_USED(in.EVMaximumDischargeReactivePower_L3, out.max_discharge_reactive_power_L3);
+    out.grid_event_condition = in.GridEventCondition;
+    CB2CPP_CONVERT_IF_USED(in.EVSessionTotalDischargeEnergyAvailable,
+                           out.session_total_discharge_energy_available);
+}
+
 template <> void convert(const struct iso20_ac_AC_ChargeLoopReqType& in, AC_ChargeLoopRequest& out) {
     convert(in.Header, out.header);
 
@@ -130,11 +159,17 @@ template <> void convert(const struct iso20_ac_AC_ChargeLoopReqType& in, AC_Char
     } else if (in.BPT_Scheduled_AC_CLReqControlMode_isUsed) {
         convert(in.BPT_Scheduled_AC_CLReqControlMode,
                 out.control_mode.emplace<datatypes::BPT_Scheduled_AC_CLReqControlMode>());
+    } else if (in.DER_Scheduled_AC_CLReqControlMode_isUsed) {
+        convert(in.DER_Scheduled_AC_CLReqControlMode,
+                out.control_mode.emplace<datatypes::DER_Scheduled_AC_CLReqControlMode>());
     } else if (in.Dynamic_AC_CLReqControlMode_isUsed) {
         convert(in.Dynamic_AC_CLReqControlMode, out.control_mode.emplace<datatypes::Dynamic_AC_CLReqControlMode>());
     } else if (in.BPT_Dynamic_AC_CLReqControlMode_isUsed) {
         convert(in.BPT_Dynamic_AC_CLReqControlMode,
                 out.control_mode.emplace<datatypes::BPT_Dynamic_AC_CLReqControlMode>());
+    } else if (in.DER_Dynamic_AC_CLReqControlMode_isUsed) {
+        convert(in.DER_Dynamic_AC_CLReqControlMode,
+                out.control_mode.emplace<datatypes::DER_Dynamic_AC_CLReqControlMode>());
     } else {
         // should not happen
         assert(false);
@@ -197,7 +232,8 @@ void convert(const iso20_ac_BPT_Scheduled_AC_CLResControlModeType& in,
 
 template <typename cb_Type> void convert(const cb_Type& in, datatypes::Dynamic_CLResControlMode& out) {
     static_assert(std::is_same_v<cb_Type, iso20_ac_Dynamic_AC_CLResControlModeType> or
-                  std::is_same_v<cb_Type, iso20_ac_BPT_Dynamic_AC_CLResControlModeType>);
+                  std::is_same_v<cb_Type, iso20_ac_BPT_Dynamic_AC_CLResControlModeType> or
+                  std::is_same_v<cb_Type, iso20_ac_DER_Dynamic_AC_CLResControlModeType>);
 
     CB2CPP_ASSIGN_IF_USED(in.DepartureTime, out.departure_time);
     CB2CPP_ASSIGN_IF_USED(in.MinimumSOC, out.minimum_soc);
@@ -221,10 +257,59 @@ template <typename cb_Type> void convert(const cb_Type& in, datatypes::Dynamic_A
     CB2CPP_CONVERT_IF_USED(in.EVSEPresentActivePower_L3, out.present_active_power_L3);
 }
 
+template <> void convert(const iso20_ac_DSOQSetpointType& in, datatypes::DSOQSetpoint& out) {
+    convert(in.DSOQSetpointValue, out.value);
+    CB2CPP_CONVERT_IF_USED(in.DSOQSetpointValue_L2, out.value_L2);
+    CB2CPP_CONVERT_IF_USED(in.DSOQSetpointValue_L3, out.value_L3);
+    out.pt1_response_reactive_power = in.PT1ResponseReactivePower;
+    convert(in.StepResponseTimeConstantReactivePower, out.step_response_time_constant_reactive_power);
+}
+
+template <> void convert(const iso20_ac_DSOCosPhiSetpointType& in, datatypes::DSOCosPhiSetpoint& out) {
+    convert(in.DSOCosPhiSetpointValue, out.value);
+    CB2CPP_CONVERT_IF_USED(in.DSOCosPhiSetpointValue_L2, out.value_L2);
+    CB2CPP_CONVERT_IF_USED(in.DSOCosPhiSetpointValue_L3, out.value_L3);
+    out.pt1_response_reactive_power = in.PT1ResponseReactivePower;
+    convert(in.StepResponseTimeConstantReactivePower, out.step_response_time_constant_reactive_power);
+}
+
+template <> void convert(const iso20_ac_DER_Scheduled_AC_CLResControlModeType& in,
+                         datatypes::DER_Scheduled_AC_CLResControlMode& out) {
+    convert(in, static_cast<datatypes::Scheduled_AC_CLResControlMode&>(out));
+    convert(in.EVSEMaximumChargePower, out.max_charge_power);
+    CB2CPP_CONVERT_IF_USED(in.EVSEMaximumChargePower_L2, out.max_charge_power_L2);
+    CB2CPP_CONVERT_IF_USED(in.EVSEMaximumChargePower_L3, out.max_charge_power_L3);
+    convert(in.EVSEMaximumDischargePower, out.max_discharge_power);
+    CB2CPP_CONVERT_IF_USED(in.EVSEMaximumDischargePower_L2, out.max_discharge_power_L2);
+    CB2CPP_CONVERT_IF_USED(in.EVSEMaximumDischargePower_L3, out.max_discharge_power_L3);
+    CB2CPP_CONVERT_IF_USED(in.DSOMaximumDischargePower, out.dso_max_discharge_power);
+    CB2CPP_CONVERT_IF_USED(in.DSOMaximumDischargePower_L2, out.dso_max_discharge_power_L2);
+    CB2CPP_CONVERT_IF_USED(in.DSOMaximumDischargePower_L3, out.dso_max_discharge_power_L3);
+    CB2CPP_CONVERT_IF_USED(in.DSOQSetpoint, out.dso_q_setpoint);
+    CB2CPP_CONVERT_IF_USED(in.DSOCosPhiSetpoint, out.dso_cos_phi_setpoint);
+}
+
 template <>
 void convert(const struct iso20_ac_BPT_Dynamic_AC_CLResControlModeType& in,
              datatypes::BPT_Dynamic_AC_CLResControlMode& out) {
     convert(in, static_cast<datatypes::Dynamic_AC_CLResControlMode&>(out));
+}
+
+template <>
+void convert(const struct iso20_ac_DER_Dynamic_AC_CLResControlModeType& in,
+             datatypes::DER_Dynamic_AC_CLResControlMode& out) {
+    convert(in, static_cast<datatypes::Dynamic_AC_CLResControlMode&>(out));
+    convert(in.EVSEMaximumChargePower, out.max_charge_power);
+    CB2CPP_CONVERT_IF_USED(in.EVSEMaximumChargePower_L2, out.max_charge_power_L2);
+    CB2CPP_CONVERT_IF_USED(in.EVSEMaximumChargePower_L3, out.max_charge_power_L3);
+    convert(in.EVSEMaximumDischargePower, out.max_discharge_power);
+    CB2CPP_CONVERT_IF_USED(in.EVSEMaximumDischargePower_L2, out.max_discharge_power_L2);
+    CB2CPP_CONVERT_IF_USED(in.EVSEMaximumDischargePower_L3, out.max_discharge_power_L3);
+    CB2CPP_CONVERT_IF_USED(in.DSOMaximumDischargePower, out.dso_max_discharge_power);
+    CB2CPP_CONVERT_IF_USED(in.DSOMaximumDischargePower_L2, out.dso_max_discharge_power_L2);
+    CB2CPP_CONVERT_IF_USED(in.DSOMaximumDischargePower_L3, out.dso_max_discharge_power_L3);
+    CB2CPP_CONVERT_IF_USED(in.DSOQSetpoint, out.dso_q_setpoint);
+    CB2CPP_CONVERT_IF_USED(in.DSOCosPhiSetpoint, out.dso_cos_phi_setpoint);
 }
 
 template <> void convert(const struct iso20_ac_AC_ChargeLoopResType& in, AC_ChargeLoopResponse& out) {
@@ -240,11 +325,17 @@ template <> void convert(const struct iso20_ac_AC_ChargeLoopResType& in, AC_Char
     } else if (in.BPT_Scheduled_AC_CLResControlMode_isUsed) {
         convert(in.BPT_Scheduled_AC_CLResControlMode,
                 out.control_mode.emplace<datatypes::BPT_Scheduled_AC_CLResControlMode>());
+    } else if (in.DER_Scheduled_AC_CLResControlMode_isUsed) {
+        convert(in.DER_Scheduled_AC_CLResControlMode,
+                out.control_mode.emplace<datatypes::DER_Scheduled_AC_CLResControlMode>());
     } else if (in.Dynamic_AC_CLResControlMode_isUsed) {
         convert(in.Dynamic_AC_CLResControlMode, out.control_mode.emplace<datatypes::Dynamic_AC_CLResControlMode>());
     } else if (in.BPT_Dynamic_AC_CLResControlMode_isUsed) {
         convert(in.BPT_Dynamic_AC_CLResControlMode,
                 out.control_mode.emplace<datatypes::BPT_Dynamic_AC_CLResControlMode>());
+    } else if (in.DER_Dynamic_AC_CLResControlMode_isUsed) {
+        convert(in.DER_Dynamic_AC_CLResControlMode,
+                out.control_mode.emplace<datatypes::DER_Dynamic_AC_CLResControlMode>());
     } else {
         // should not happen
         assert(false);
@@ -308,6 +399,24 @@ void convert(const datatypes::BPT_Scheduled_AC_CLResControlMode& in,
     convert(static_cast<const datatypes::Scheduled_AC_CLResControlMode&>(in), out);
 }
 
+template <> void convert(const datatypes::DSOQSetpoint& in, iso20_ac_DSOQSetpointType& out) {
+    init_iso20_ac_DSOQSetpointType(&out);
+    convert(in.value, out.DSOQSetpointValue);
+    CPP2CB_CONVERT_IF_USED(in.value_L2, out.DSOQSetpointValue_L2);
+    CPP2CB_CONVERT_IF_USED(in.value_L3, out.DSOQSetpointValue_L3);
+    out.PT1ResponseReactivePower = in.pt1_response_reactive_power;
+    convert(in.step_response_time_constant_reactive_power, out.StepResponseTimeConstantReactivePower);
+}
+
+template <> void convert(const datatypes::DSOCosPhiSetpoint& in, iso20_ac_DSOCosPhiSetpointType& out) {
+    init_iso20_ac_DSOCosPhiSetpointType(&out);
+    convert(in.value, out.DSOCosPhiSetpointValue);
+    CPP2CB_CONVERT_IF_USED(in.value_L2, out.DSOCosPhiSetpointValue_L2);
+    CPP2CB_CONVERT_IF_USED(in.value_L3, out.DSOCosPhiSetpointValue_L3);
+    out.PT1ResponseReactivePower = in.pt1_response_reactive_power;
+    convert(in.step_response_time_constant_reactive_power, out.StepResponseTimeConstantReactivePower);
+}
+
 template <typename cb_Type> void convert(const datatypes::Dynamic_CLResControlMode& in, cb_Type& out) {
     CPP2CB_ASSIGN_IF_USED(in.departure_time, out.DepartureTime);
     CPP2CB_ASSIGN_IF_USED(in.minimum_soc, out.MinimumSOC);
@@ -340,8 +449,10 @@ void convert(const datatypes::BPT_Dynamic_AC_CLResControlMode& in,
 struct ControlModeVisitor {
     using ScheduledCM = datatypes::Scheduled_AC_CLResControlMode;
     using BPT_ScheduledCM = datatypes::BPT_Scheduled_AC_CLResControlMode;
+    using DER_ScheduledCM = datatypes::DER_Scheduled_AC_CLResControlMode;
     using DynamicCM = datatypes::Dynamic_AC_CLResControlMode;
     using BPT_DynamicCM = datatypes::BPT_Dynamic_AC_CLResControlMode;
+    using DER_DynamicCM = datatypes::DER_Dynamic_AC_CLResControlMode;
 
     ControlModeVisitor(iso20_ac_AC_ChargeLoopResType& res_) : res(res_){};
 
@@ -359,6 +470,24 @@ struct ControlModeVisitor {
         CB_SET_USED(res.BPT_Scheduled_AC_CLResControlMode);
     }
 
+    void operator()(const DER_ScheduledCM& in) {
+        auto& out = res.DER_Scheduled_AC_CLResControlMode;
+        init_iso20_ac_DER_Scheduled_AC_CLResControlModeType(&out);
+        convert(static_cast<const ScheduledCM&>(in), out);
+        convert(in.max_charge_power, out.EVSEMaximumChargePower);
+        CPP2CB_CONVERT_IF_USED(in.max_charge_power_L2, out.EVSEMaximumChargePower_L2);
+        CPP2CB_CONVERT_IF_USED(in.max_charge_power_L3, out.EVSEMaximumChargePower_L3);
+        convert(in.max_discharge_power, out.EVSEMaximumDischargePower);
+        CPP2CB_CONVERT_IF_USED(in.max_discharge_power_L2, out.EVSEMaximumDischargePower_L2);
+        CPP2CB_CONVERT_IF_USED(in.max_discharge_power_L3, out.EVSEMaximumDischargePower_L3);
+        CPP2CB_CONVERT_IF_USED(in.dso_max_discharge_power, out.DSOMaximumDischargePower);
+        CPP2CB_CONVERT_IF_USED(in.dso_max_discharge_power_L2, out.DSOMaximumDischargePower_L2);
+        CPP2CB_CONVERT_IF_USED(in.dso_max_discharge_power_L3, out.DSOMaximumDischargePower_L3);
+        CPP2CB_CONVERT_IF_USED(in.dso_q_setpoint, out.DSOQSetpoint);
+        CPP2CB_CONVERT_IF_USED(in.dso_cos_phi_setpoint, out.DSOCosPhiSetpoint);
+        CB_SET_USED(res.DER_Scheduled_AC_CLResControlMode);
+    }
+
     void operator()(const DynamicCM& in) {
         auto& out = res.Dynamic_AC_CLResControlMode;
         init_iso20_ac_Dynamic_AC_CLResControlModeType(&out);
@@ -371,6 +500,24 @@ struct ControlModeVisitor {
         init_iso20_ac_BPT_Dynamic_AC_CLResControlModeType(&out);
         convert(in, out);
         CB_SET_USED(res.BPT_Dynamic_AC_CLResControlMode);
+    }
+
+    void operator()(const DER_DynamicCM& in) {
+        auto& out = res.DER_Dynamic_AC_CLResControlMode;
+        init_iso20_ac_DER_Dynamic_AC_CLResControlModeType(&out);
+        convert(static_cast<const DynamicCM&>(in), out);
+        convert(in.max_charge_power, out.EVSEMaximumChargePower);
+        CPP2CB_CONVERT_IF_USED(in.max_charge_power_L2, out.EVSEMaximumChargePower_L2);
+        CPP2CB_CONVERT_IF_USED(in.max_charge_power_L3, out.EVSEMaximumChargePower_L3);
+        convert(in.max_discharge_power, out.EVSEMaximumDischargePower);
+        CPP2CB_CONVERT_IF_USED(in.max_discharge_power_L2, out.EVSEMaximumDischargePower_L2);
+        CPP2CB_CONVERT_IF_USED(in.max_discharge_power_L3, out.EVSEMaximumDischargePower_L3);
+        CPP2CB_CONVERT_IF_USED(in.dso_max_discharge_power, out.DSOMaximumDischargePower);
+        CPP2CB_CONVERT_IF_USED(in.dso_max_discharge_power_L2, out.DSOMaximumDischargePower_L2);
+        CPP2CB_CONVERT_IF_USED(in.dso_max_discharge_power_L3, out.DSOMaximumDischargePower_L3);
+        CPP2CB_CONVERT_IF_USED(in.dso_q_setpoint, out.DSOQSetpoint);
+        CPP2CB_CONVERT_IF_USED(in.dso_cos_phi_setpoint, out.DSOCosPhiSetpoint);
+        CB_SET_USED(res.DER_Dynamic_AC_CLResControlMode);
     }
 
 private:
@@ -429,8 +576,10 @@ template <> void convert(const datatypes::DisplayParameters& in, struct iso20_ac
 struct ModeRequestVisitor {
     using ScheduledCM = datatypes::Scheduled_AC_CLReqControlMode;
     using BPT_ScheduledCM = datatypes::BPT_Scheduled_AC_CLReqControlMode;
+    using DER_ScheduledCM = datatypes::DER_Scheduled_AC_CLReqControlMode;
     using DynamicCM = datatypes::Dynamic_AC_CLReqControlMode;
     using BPT_DynamicCM = datatypes::BPT_Dynamic_AC_CLReqControlMode;
+    using DER_DynamicCM = datatypes::DER_Dynamic_AC_CLReqControlMode;
 
 public:
     ModeRequestVisitor(iso20_ac_AC_ChargeLoopReqType& req_) : req(req_){};
@@ -446,12 +595,39 @@ public:
         CB_SET_USED(req.BPT_Scheduled_AC_CLReqControlMode);
         auto& out = req.BPT_Scheduled_AC_CLReqControlMode;
         convert_scheduled_common(in, out);
-        CPP2CB_CONVERT_IF_USED(in.max_discharge_power, out.EVMaximumDischargePower);
+        if (in.max_discharge_power) {
+            convert(in.max_discharge_power.value(), out.EVMaximumDischargePower);
+        }
         CPP2CB_CONVERT_IF_USED(in.max_discharge_power_L2, out.EVMaximumDischargePower_L2);
         CPP2CB_CONVERT_IF_USED(in.max_discharge_power_L3, out.EVMaximumDischargePower_L3);
-        CPP2CB_CONVERT_IF_USED(in.min_discharge_power, out.EVMinimumDischargePower);
+        if (in.min_discharge_power) {
+            convert(in.min_discharge_power.value(), out.EVMinimumDischargePower);
+        }
         CPP2CB_CONVERT_IF_USED(in.min_discharge_power_L2, out.EVMinimumDischargePower_L2);
         CPP2CB_CONVERT_IF_USED(in.min_discharge_power_L3, out.EVMinimumDischargePower_L3);
+    }
+
+    void operator()(const DER_ScheduledCM& in) {
+        init_iso20_ac_DER_Scheduled_AC_CLReqControlModeType(&req.DER_Scheduled_AC_CLReqControlMode);
+        CB_SET_USED(req.DER_Scheduled_AC_CLReqControlMode);
+        auto& out = req.DER_Scheduled_AC_CLReqControlMode;
+        convert_scheduled_common(in, out);
+        if (in.max_discharge_power) {
+            convert(in.max_discharge_power.value(), out.EVMaximumDischargePower);
+        }
+        CPP2CB_CONVERT_IF_USED(in.max_discharge_power_L2, out.EVMaximumDischargePower_L2);
+        CPP2CB_CONVERT_IF_USED(in.max_discharge_power_L3, out.EVMaximumDischargePower_L3);
+        if (in.min_discharge_power) {
+            convert(in.min_discharge_power.value(), out.EVMinimumDischargePower);
+        }
+        CPP2CB_CONVERT_IF_USED(in.min_discharge_power_L2, out.EVMinimumDischargePower_L2);
+        CPP2CB_CONVERT_IF_USED(in.min_discharge_power_L3, out.EVMinimumDischargePower_L3);
+        CPP2CB_CONVERT_IF_USED(in.max_charge_reactive_power, out.EVMaximumChargeReactivePower);
+        CPP2CB_CONVERT_IF_USED(in.max_charge_reactive_power_L2, out.EVMaximumChargeReactivePower_L2);
+        CPP2CB_CONVERT_IF_USED(in.max_charge_reactive_power_L3, out.EVMaximumChargeReactivePower_L3);
+        CPP2CB_CONVERT_IF_USED(in.max_discharge_reactive_power, out.EVMaximumDischargeReactivePower);
+        CPP2CB_CONVERT_IF_USED(in.max_discharge_reactive_power_L2, out.EVMaximumDischargeReactivePower_L2);
+        CPP2CB_CONVERT_IF_USED(in.max_discharge_reactive_power_L3, out.EVMaximumDischargeReactivePower_L3);
     }
 
     template <typename ModeReqTypeIn, typename ModeReqTypeOut>
@@ -491,6 +667,29 @@ public:
         CPP2CB_CONVERT_IF_USED(in.min_discharge_power_L3, out.EVMinimumDischargePower_L3);
         CPP2CB_CONVERT_IF_USED(in.max_v2x_energy_request, out.EVMaximumV2XEnergyRequest);
         CPP2CB_CONVERT_IF_USED(in.min_v2x_energy_request, out.EVMinimumV2XEnergyRequest);
+    }
+    void operator()(const DER_DynamicCM& in) {
+        init_iso20_ac_DER_Dynamic_AC_CLReqControlModeType(&req.DER_Dynamic_AC_CLReqControlMode);
+        CB_SET_USED(req.DER_Dynamic_AC_CLReqControlMode);
+        auto& out = req.DER_Dynamic_AC_CLReqControlMode;
+        convert_dynamic_common(in, out);
+        convert(in.max_discharge_power, out.EVMaximumDischargePower);
+        CPP2CB_CONVERT_IF_USED(in.max_discharge_power_L2, out.EVMaximumDischargePower_L2);
+        CPP2CB_CONVERT_IF_USED(in.max_discharge_power_L3, out.EVMaximumDischargePower_L3);
+        convert(in.min_discharge_power, out.EVMinimumDischargePower);
+        CPP2CB_CONVERT_IF_USED(in.min_discharge_power_L2, out.EVMinimumDischargePower_L2);
+        CPP2CB_CONVERT_IF_USED(in.min_discharge_power_L3, out.EVMinimumDischargePower_L3);
+        CPP2CB_CONVERT_IF_USED(in.max_charge_reactive_power, out.EVMaximumChargeReactivePower);
+        CPP2CB_CONVERT_IF_USED(in.max_charge_reactive_power_L2, out.EVMaximumChargeReactivePower_L2);
+        CPP2CB_CONVERT_IF_USED(in.max_charge_reactive_power_L3, out.EVMaximumChargeReactivePower_L3);
+        CPP2CB_CONVERT_IF_USED(in.max_discharge_reactive_power, out.EVMaximumDischargeReactivePower);
+        CPP2CB_CONVERT_IF_USED(in.max_discharge_reactive_power_L2, out.EVMaximumDischargeReactivePower_L2);
+        CPP2CB_CONVERT_IF_USED(in.max_discharge_reactive_power_L3, out.EVMaximumDischargeReactivePower_L3);
+        out.GridEventCondition = in.grid_event_condition;
+        CPP2CB_CONVERT_IF_USED(in.max_v2x_energy_request, out.EVMaximumV2XEnergyRequest);
+        CPP2CB_CONVERT_IF_USED(in.min_v2x_energy_request, out.EVMinimumV2XEnergyRequest);
+        CPP2CB_CONVERT_IF_USED(in.session_total_discharge_energy_available,
+                               out.EVSessionTotalDischargeEnergyAvailable);
     }
     template <typename ModeReqTypeIn, typename ModeReqTypeOut>
     static void convert_dynamic_common(const ModeReqTypeIn& in, ModeReqTypeOut& out) {
