@@ -14,7 +14,7 @@ The following table shows the current support for the listed EVSE ISO15118-20 fe
 | DC, DC_BPT                         | :heavy_check_mark: |
 | AC, AC_BPT                         | :heavy_check_mark: |
 | MCS (Amd.)                         | :heavy_check_mark: |
-| AC DER (Amd.)                      |                    |
+| AC DER (Amd.)                      | WIP (app testing)|
 | WPT                                |                    |
 | ACDP                               |                    |
 | ExternalPayment                    | :heavy_check_mark: |
@@ -87,7 +87,7 @@ sudo dnf update
 sudo dnf install gcc gcc-c++ git make cmake openssl-devel 
 ```
 
-OpenSSL version 3.0 or above is required. The build system `ninja` is optional. 
+OpenSSL version 3.0 or above is required. The build system `ninja` is optional.
 
 Getting started
 ---------------
@@ -112,6 +112,7 @@ ninja -C build iso15118_gcovr_coverage
 The coverage report will be available in the index.html file in the `build/iso15118_gcovr_coverage` directory.
 
 Version 8.2 or higher of gcovr is required for the coverage report. Install gcovr release from PyPI:
+
 ```
 pip install gcovr
 ```
@@ -120,11 +121,13 @@ GDB Debugging (VS Code)
 -----------------------
 
 Run the cmake (from the build dir) with the debug commands on:
+
 ```
 cmake .. -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
 ```
 
 Run the GDB debugger with the following configuration:
+
 ```
 {
     "name": "(gdb) Launch LIBISO TESTS",
