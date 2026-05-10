@@ -48,10 +48,11 @@ dt::DERCurve make_der_curve(const dt::DERCurveDataUnit x_unit, const dt::DERCurv
     return curve;
 }
 
-dt::FrequencyWatt make_frequency_watt(const float start_frequency, const float stop_frequency) {
+dt::FrequencyWatt make_frequency_watt(const dt::RationalNumber start_frequency,
+                                      const dt::RationalNumber stop_frequency) {
     dt::FrequencyWatt frequency_watt;
-    frequency_watt.f_start = dt::from_float(start_frequency);
-    frequency_watt.f_stop = dt::from_float(stop_frequency);
+    frequency_watt.f_start = start_frequency;
+    frequency_watt.f_stop = stop_frequency;
     frequency_watt.slope = one();
     frequency_watt.power_reference = dt::DERPowerReference::MaximumDischargePower;
     frequency_watt.hysteresis_control = false;
@@ -69,6 +70,83 @@ dt::VoltWatt make_volt_watt() {
     volt_watt.step_response_time_constant_active_power = seconds(0);
     return volt_watt;
 }
+
+dt::DERControlFunctions make_required_ac_der_control_functions() {
+    dt::DERControlFunctions control_functions;
+
+    control_functions.volt_watt = true;
+    control_functions.dso_q_setpoint_provision = true;
+    control_functions.dso_cos_phi_setpoint_provision = true;
+    control_functions.dc_injection_restriction = true;
+    control_functions.under_frequency_watt = true;
+    control_functions.over_frequency_watt = true;
+    control_functions.volt_var = true;
+    control_functions.watt_var = true;
+    control_functions.watt_cos_phi = true;
+    control_functions.over_voltage_fault_ride_through = true;
+    control_functions.under_voltage_fault_ride_through = true;
+    control_functions.zero_current = true;
+
+    control_functions.standard_bitmap = (1u << 0) | (1u << 1) | (1u << 2) | (1u << 3) | (1u << 4) | (1u << 5);
+    control_functions.extended_bitmap = (1u << 0) | (1u << 1) | (1u << 2) | (1u << 3) | (1u << 4) | (1u << 5);
+
+    return control_functions;
+}
+
+bool supports_selected_controls(const dt::DERControlFunctions& selected, const dt::DERControlFunctions& supported) {
+    return (not selected.volt_watt or supported.volt_watt) and
+           (not selected.dso_q_setpoint_provision or supported.dso_q_setpoint_provision) and
+           (not selected.dso_cos_phi_setpoint_provision or supported.dso_cos_phi_setpoint_provision) and
+           (not selected.dc_injection_restriction or supported.dc_injection_restriction) and
+           (not selected.under_frequency_watt or supported.under_frequency_watt) and
+           (not selected.over_frequency_watt or supported.over_frequency_watt) and
+           (not selected.volt_var or supported.volt_var) and (not selected.watt_var or supported.watt_var) and
+           (not selected.watt_cos_phi or supported.watt_cos_phi) and
+           (not selected.over_voltage_fault_ride_through or supported.over_voltage_fault_ride_through) and
+           (not selected.under_voltage_fault_ride_through or supported.under_voltage_fault_ride_through) and
+           (not selected.zero_current or supported.zero_current);
+}
+
+bool snapshots_are_usable(const AcDerSeccControlSnapshots& snapshots) {
+    return snapshots.runtime_state.ac_der_enabled and snapshots.runtime_state.grid_policy_fresh and
+           snapshots.runtime_state.dso_control_fresh and snapshots.grid_policy.valid and snapshots.dso_control.valid and
+           snapshots.evse_capability.valid;
+}
+
+class SeccAcDerControlProvider : public IAcDerControlProvider {
+public:
+    explicit SeccAcDerControlProvider(AcDerSeccControlSnapshots snapshots_) : snapshots(std::move(snapshots_)) {
+    }
+
+    std::optional<AcDerControlConfig> get_ac_der_control_config(const AcDerControlContext& context) const override {
+        if (context.selected_energy_service != dt::ServiceCategory::AC_DER or
+            not context.selected_der_control_functions.has_value() or not snapshots_are_usable(snapshots) or
+            not supports_selected_controls(*context.selected_der_control_functions,
+                                           snapshots.evse_capability.supported_control_functions)) {
+            return std::nullopt;
+        }
+
+        auto config = make_default_ac_der_control_config();
+
+        config.cpd_control.maximum_level_dc_injection = snapshots.grid_policy.maximum_dc_injection;
+        config.dso_q_setpoint = snapshots.dso_control.q_setpoint;
+        config.dso_cos_phi_setpoint = snapshots.dso_control.cos_phi_setpoint;
+
+        auto& active_power_support = config.cpd_control.active_power_support.emplace();
+        active_power_support.volt_watt = make_volt_watt();
+        active_power_support.volt_watt->u_start = snapshots.grid_policy.volt_watt_start_voltage;
+        active_power_support.volt_watt->u_stop = snapshots.grid_policy.volt_watt_stop_voltage;
+        active_power_support.under_frequency_watt = make_frequency_watt(
+            snapshots.grid_policy.under_frequency_watt_start_hz, snapshots.grid_policy.under_frequency_watt_stop_hz);
+        active_power_support.over_frequency_watt = make_frequency_watt(
+            snapshots.grid_policy.over_frequency_watt_start_hz, snapshots.grid_policy.over_frequency_watt_stop_hz);
+
+        return config;
+    }
+
+private:
+    AcDerSeccControlSnapshots snapshots;
+};
 
 dt::FaultRideThrough make_fault_ride_through() {
     dt::FaultRideThrough fault_ride_through;
@@ -109,8 +187,8 @@ AcDerControlConfig make_default_ac_der_control_config() {
         dt::DERPowerFactorExcitation::UnderExcited;
 
     auto& active_power_support = config.cpd_control.active_power_support.emplace();
-    active_power_support.under_frequency_watt = make_frequency_watt(49.8f, 49.5f);
-    active_power_support.over_frequency_watt = make_frequency_watt(50.2f, 50.5f);
+    active_power_support.under_frequency_watt = make_frequency_watt(dt::from_float(49.8f), dt::from_float(49.5f));
+    active_power_support.over_frequency_watt = make_frequency_watt(dt::from_float(50.2f), dt::from_float(50.5f));
     active_power_support.volt_watt = make_volt_watt();
 
     config.cpd_control.maximum_level_dc_injection = zero();
@@ -123,6 +201,37 @@ AcDerControlConfig make_default_ac_der_control_config() {
 
 std::shared_ptr<const IAcDerControlProvider> make_static_ac_der_control_provider(AcDerControlConfig config) {
     return std::make_shared<StaticAcDerControlProvider>(std::move(config));
+}
+
+AcDerSeccControlSnapshots make_default_ac_der_secc_control_snapshots() {
+    AcDerSeccControlSnapshots snapshots;
+
+    snapshots.grid_policy.volt_watt_start_voltage = {241, 0};
+    snapshots.grid_policy.volt_watt_stop_voltage = {253, 0};
+    snapshots.grid_policy.under_frequency_watt_start_hz = {498, -1};
+    snapshots.grid_policy.under_frequency_watt_stop_hz = {495, -1};
+    snapshots.grid_policy.over_frequency_watt_start_hz = {502, -1};
+    snapshots.grid_policy.over_frequency_watt_stop_hz = {505, -1};
+    snapshots.grid_policy.maximum_dc_injection = {5, -1};
+    snapshots.grid_policy.valid = true;
+
+    snapshots.dso_control.q_setpoint = {{7, 2}, std::nullopt, std::nullopt, false, zero()};
+    snapshots.dso_control.cos_phi_setpoint = {
+        {95, -2}, std::nullopt, std::nullopt, dt::DERPowerFactorExcitation::UnderExcited, false, zero()};
+    snapshots.dso_control.valid = true;
+
+    snapshots.evse_capability.supported_control_functions = make_required_ac_der_control_functions();
+    snapshots.evse_capability.valid = true;
+
+    snapshots.runtime_state.ac_der_enabled = true;
+    snapshots.runtime_state.grid_policy_fresh = true;
+    snapshots.runtime_state.dso_control_fresh = true;
+
+    return snapshots;
+}
+
+std::shared_ptr<const IAcDerControlProvider> make_secc_ac_der_control_provider(AcDerSeccControlSnapshots snapshots) {
+    return std::make_shared<SeccAcDerControlProvider>(std::move(snapshots));
 }
 
 } // namespace iso15118::d20

@@ -26,6 +26,41 @@ struct AcDerControlContext {
     std::optional<dt::DERControlFunctions> selected_der_control_functions;
 };
 
+struct AcDerGridPolicySnapshot {
+    dt::RationalNumber volt_watt_start_voltage;
+    dt::RationalNumber volt_watt_stop_voltage;
+    dt::RationalNumber under_frequency_watt_start_hz;
+    dt::RationalNumber under_frequency_watt_stop_hz;
+    dt::RationalNumber over_frequency_watt_start_hz;
+    dt::RationalNumber over_frequency_watt_stop_hz;
+    dt::RationalNumber maximum_dc_injection;
+    bool valid{false};
+};
+
+struct AcDerDsoControlSnapshot {
+    dt::DSOQSetpoint q_setpoint;
+    dt::DSOCosPhiSetpoint cos_phi_setpoint;
+    bool valid{false};
+};
+
+struct AcDerEvseCapabilitySnapshot {
+    dt::DERControlFunctions supported_control_functions;
+    bool valid{false};
+};
+
+struct AcDerRuntimeStateSnapshot {
+    bool ac_der_enabled{false};
+    bool grid_policy_fresh{false};
+    bool dso_control_fresh{false};
+};
+
+struct AcDerSeccControlSnapshots {
+    AcDerGridPolicySnapshot grid_policy;
+    AcDerDsoControlSnapshot dso_control;
+    AcDerEvseCapabilitySnapshot evse_capability;
+    AcDerRuntimeStateSnapshot runtime_state;
+};
+
 class IAcDerControlProvider {
 public:
     virtual ~IAcDerControlProvider() = default;
@@ -35,5 +70,7 @@ public:
 
 AcDerControlConfig make_default_ac_der_control_config();
 std::shared_ptr<const IAcDerControlProvider> make_static_ac_der_control_provider(AcDerControlConfig config);
+AcDerSeccControlSnapshots make_default_ac_der_secc_control_snapshots();
+std::shared_ptr<const IAcDerControlProvider> make_secc_ac_der_control_provider(AcDerSeccControlSnapshots snapshots);
 
 } // namespace iso15118::d20
