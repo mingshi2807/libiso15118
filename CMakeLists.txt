@@ -38,6 +38,10 @@ Licence Agreement (“Licence Agreement”), clauses 1. ISO’s Copyright, \
 7. Termination, 8. Limitations, and 9. Governing Law." OFF)
 
 option(ISO15118_INSTALL "Enable install target" ${EVC_MAIN_PROJECT})
+set(ISO15118_LIBCBV2G_GIT_REPOSITORY "https://github.com/mingshi2807/libcbv2g.git"
+    CACHE STRING "libcbv2g Git repository used by the FetchContent fallback")
+set(ISO15118_LIBCBV2G_GIT_TAG "03d1b16072fa58bb5ea8ce48dfaef6ad23365da4"
+    CACHE STRING "libcbv2g Git tag or commit used by the FetchContent fallback")
 
 # list of compile options
 set(ISO15118_COMPILE_OPTIONS_WARNING "-Wall;-Wextra;-Wno-unused-function;-Werror" CACHE STRING "A list of compile options used")
@@ -66,11 +70,14 @@ else()
 
     find_package(cbv2g QUIET)
     if (NOT cbv2g_FOUND)
-        message(STATUS "Retrieving libcbv2g using FetchContent")
+        message(STATUS "Retrieving libcbv2g using FetchContent from ${ISO15118_LIBCBV2G_GIT_REPOSITORY} at ${ISO15118_LIBCBV2G_GIT_TAG}")
+        # Keep install exports disabled when cbv2g is embedded through
+        # FetchContent; its targets are not part of this package export set.
+        set(ISO15118_INSTALL OFF)
         FetchContent_Declare(
             libcbv2g
-            GIT_REPOSITORY https://github.com/EVerest/libcbv2g.git
-            GIT_TAG        v0.3.1
+            GIT_REPOSITORY ${ISO15118_LIBCBV2G_GIT_REPOSITORY}
+            GIT_TAG        ${ISO15118_LIBCBV2G_GIT_TAG}
         )
         FetchContent_MakeAvailable(libcbv2g)
     endif()
