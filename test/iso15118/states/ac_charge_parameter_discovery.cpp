@@ -3,7 +3,11 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <iso15118/detail/d20/state/ac_charge_parameter_discovery.hpp>
+#include <iso15118/io/stream_view.hpp>
+#include <iso15118/message/ac_charge_parameter_discovery.hpp>
+#include <iso15118/message/type.hpp>
 
+#include <array>
 #include <utility>
 
 using namespace iso15118;
@@ -426,6 +430,13 @@ SCENARIO("AC charge parameter discovery state handling") {
             REQUIRE(transfer_mode.der_control.reactive_power_support->watt_cos_phi.has_value());
             REQUIRE(transfer_mode.der_control.overvoltage_fault_ride_through.has_value());
             REQUIRE(transfer_mode.der_control.zero_current.has_value());
+        }
+
+        THEN("DER AC response serializes to EXI") {
+            std::array<uint8_t, 8192> buffer{};
+            const iso15118::io::StreamOutputView output_view{buffer.data(), buffer.size()};
+
+            REQUIRE_NOTHROW(message_20::serialize(res, output_view));
         }
     }
 

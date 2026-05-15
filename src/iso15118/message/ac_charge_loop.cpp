@@ -158,8 +158,7 @@ void convert(const struct iso20_ac_DER_Dynamic_AC_CLReqControlModeType& in,
     CB2CPP_CONVERT_IF_USED(in.EVMaximumDischargeReactivePower_L2, out.max_discharge_reactive_power_L2);
     CB2CPP_CONVERT_IF_USED(in.EVMaximumDischargeReactivePower_L3, out.max_discharge_reactive_power_L3);
     out.grid_event_condition = in.GridEventCondition;
-    CB2CPP_CONVERT_IF_USED(in.EVSessionTotalDischargeEnergyAvailable,
-                           out.session_total_discharge_energy_available);
+    CB2CPP_CONVERT_IF_USED(in.EVSessionTotalDischargeEnergyAvailable, out.session_total_discharge_energy_available);
 }
 
 template <> void convert(const struct iso20_ac_AC_ChargeLoopReqType& in, AC_ChargeLoopRequest& out) {
@@ -289,8 +288,9 @@ template <> void convert(const iso20_ac_DSOCosPhiSetpointType& in, datatypes::DS
     convert(in.StepResponseTimeConstantReactivePower, out.step_response_time_constant_reactive_power);
 }
 
-template <> void convert(const iso20_ac_DER_Scheduled_AC_CLResControlModeType& in,
-                         datatypes::DER_Scheduled_AC_CLResControlMode& out) {
+template <>
+void convert(const iso20_ac_DER_Scheduled_AC_CLResControlModeType& in,
+             datatypes::DER_Scheduled_AC_CLResControlMode& out) {
     convert(in, static_cast<datatypes::Scheduled_AC_CLResControlMode&>(out));
     convert(in.EVSEMaximumChargePower, out.max_charge_power);
     CB2CPP_CONVERT_IF_USED(in.EVSEMaximumChargePower_L2, out.max_charge_power_L2);
@@ -398,11 +398,11 @@ template <> void convert(const datatypes::Receipt& in, struct iso20_ac_ReceiptTy
 template <typename cb_Type> void convert(const datatypes::Scheduled_AC_CLResControlMode& in, cb_Type& out) {
     CPP2CB_CONVERT_IF_USED(in.target_active_power, out.EVSETargetActivePower);
     CPP2CB_CONVERT_IF_USED(in.target_active_power_L2, out.EVSETargetActivePower_L2);
-    CPP2CB_CONVERT_IF_USED(in.target_active_power_L2, out.EVSETargetActivePower_L3);
+    CPP2CB_CONVERT_IF_USED(in.target_active_power_L3, out.EVSETargetActivePower_L3);
 
     CPP2CB_CONVERT_IF_USED(in.target_reactive_power, out.EVSETargetReactivePower);
     CPP2CB_CONVERT_IF_USED(in.target_reactive_power_L2, out.EVSETargetReactivePower_L2);
-    CPP2CB_CONVERT_IF_USED(in.target_reactive_power_L2, out.EVSETargetReactivePower_L3);
+    CPP2CB_CONVERT_IF_USED(in.target_reactive_power_L3, out.EVSETargetReactivePower_L3);
 
     CPP2CB_CONVERT_IF_USED(in.present_active_power, out.EVSEPresentActivePower);
     CPP2CB_CONVERT_IF_USED(in.present_active_power_L2, out.EVSEPresentActivePower_L2);
@@ -706,8 +706,7 @@ public:
         out.GridEventCondition = in.grid_event_condition;
         CPP2CB_CONVERT_IF_USED(in.max_v2x_energy_request, out.EVMaximumV2XEnergyRequest);
         CPP2CB_CONVERT_IF_USED(in.min_v2x_energy_request, out.EVMinimumV2XEnergyRequest);
-        CPP2CB_CONVERT_IF_USED(in.session_total_discharge_energy_available,
-                               out.EVSessionTotalDischargeEnergyAvailable);
+        CPP2CB_CONVERT_IF_USED(in.session_total_discharge_energy_available, out.EVSessionTotalDischargeEnergyAvailable);
     }
     template <typename ModeReqTypeIn, typename ModeReqTypeOut>
     static void convert_dynamic_common(const ModeReqTypeIn& in, ModeReqTypeOut& out) {

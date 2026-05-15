@@ -46,8 +46,12 @@ public:
         msg_exch.set_request(std::make_unique<message_20::Variant>(request));
     }
 
+    template <typename ControlEventType> void handle_control_event(const ControlEventType& control_event) {
+        active_control_event.emplace(control_event);
+    }
+
 private:
-    std::array<uint8_t, 1024> output_buffer{};
+    std::array<uint8_t, 8192> output_buffer{};
     io::StreamOutputView output_stream_view{output_buffer.data(), output_buffer.size()};
 
     d20::MessageExchange msg_exch{output_stream_view};

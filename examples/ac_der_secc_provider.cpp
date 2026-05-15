@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 Vedecom Contributors to EVerest
+// 2026 Vedecom Contributors to EVerest
 #include <iso15118/d20/ac_der_control.hpp>
 #include <iso15118/d20/config.hpp>
 

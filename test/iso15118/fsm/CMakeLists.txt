@@ -16,6 +16,7 @@ endfunction()
 
 create_fsm_test_target(session_setup)
 create_fsm_test_target(service_detail)
+create_fsm_test_target(ac_der_iec_flow)
 
 add_executable(test_d20_transitions d20_transitions.cpp)
 

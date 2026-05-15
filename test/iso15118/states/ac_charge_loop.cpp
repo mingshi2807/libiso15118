@@ -6,6 +6,8 @@
 
 #include <iso15118/d20/config.hpp>
 
+#include <cbv2g/iso_20/iso20_AC_Datatypes.h>
+
 #include <memory>
 #include <utility>
 
@@ -69,6 +71,10 @@ public:
         return std::nullopt;
     }
 };
+
+bool same_rational(const iso20_ac_RationalNumberType& actual, const dt::RationalNumber& expected) {
+    return actual.Value == expected.value and actual.Exponent == expected.exponent;
+}
 } // namespace
 
 SCENARIO("AC charge loop state handling") {
@@ -461,6 +467,33 @@ SCENARIO("AC charge loop state handling") {
         }
     }
 
+    GIVEN("Bad case - AC_DER dynamic mode with invalid DSO cos phi setpoint") {
+        d20::SelectedServiceParameters service_parameters = d20::SelectedServiceParameters(
+            dt::ServiceCategory::AC_DER, dt::AcConnector::ThreePhase, dt::ControlMode::Dynamic,
+            dt::MobilityNeedsMode::ProvidedByEvcc, dt::Pricing::NoPricing, dt::BptChannel::Unified,
+            dt::GeneratorMode::GridFollowing, 230, dt::GridCodeIslandingDetectionMethod::Passive,
+            get_mandatory_der_control_functions());
+
+        d20::Session session = d20::Session(service_parameters);
+        message_20::AC_ChargeLoopRequest req;
+        req.header.session_id = session.get_id();
+        req.header.timestamp = 1691411798;
+        req.control_mode.emplace<Dynamic_DER_AC_Req>();
+        req.meter_info_requested = false;
+
+        auto ac_der_control_config = d20::make_default_ac_der_control_config();
+        ac_der_control_config.dso_cos_phi_setpoint.value = {101, -2};
+        const auto provider = RecordingAcDerControlProvider(ac_der_control_config);
+
+        const auto res =
+            d20::state::handle_request(req, session, false, false, 50, ac_limits, d20::AcTargetPower{},
+                                       d20::AcPresentPower{}, d20::UpdateDynamicModeParameters(), provider);
+
+        THEN("ResponseCode: FAILED") {
+            REQUIRE(res.response_code == dt::ResponseCode::FAILED);
+        }
+    }
+
     GIVEN("Good case - AC dynamic mode, mobility_needs_mode = 2") {
 
         d20::SelectedServiceParameters service_parameters = d20::SelectedServiceParameters(
@@ -599,6 +632,75 @@ SCENARIO("AC charge loop state handling") {
             REQUIRE(res.status.has_value() == true);
             REQUIRE(res.status.value().notification == dt::EvseNotification::Pause);
             REQUIRE(res.status.value().notification_max_delay == 60);
+        }
+    }
+}
+
+SCENARIO("AC charge loop response serialization") {
+    GIVEN("A scheduled DER AC response with distinct L2 and L3 targets") {
+        message_20::AC_ChargeLoopResponse res;
+        res.response_code = dt::ResponseCode::OK;
+
+        auto& control_mode = res.control_mode.emplace<Scheduled_DER_AC_Res>();
+        control_mode.target_active_power = dt::RationalNumber{1, 0};
+        control_mode.target_active_power_L2 = dt::RationalNumber{2, 0};
+        control_mode.target_active_power_L3 = dt::RationalNumber{3, 0};
+        control_mode.target_reactive_power = dt::RationalNumber{4, 0};
+        control_mode.target_reactive_power_L2 = dt::RationalNumber{5, 0};
+        control_mode.target_reactive_power_L3 = dt::RationalNumber{6, 0};
+        control_mode.max_charge_power = dt::RationalNumber{22, 3};
+        control_mode.max_discharge_power = dt::RationalNumber{11, 3};
+        control_mode.dso_q_setpoint =
+            dt::DSOQSetpoint{dt::RationalNumber{7, 2}, std::nullopt, std::nullopt, false, dt::RationalNumber{0, 0}};
+        control_mode.dso_cos_phi_setpoint = dt::DSOCosPhiSetpoint{
+            dt::RationalNumber{95, -2}, std::nullopt, std::nullopt, dt::DERPowerFactorExcitation::UnderExcited, false,
+            dt::RationalNumber{0, 0}};
+
+        iso20_ac_AC_ChargeLoopResType out;
+        message_20::convert(res, out);
+
+        THEN("The generated cbv2g structure preserves L3 values") {
+            REQUIRE(out.DER_Scheduled_AC_CLResControlMode_isUsed);
+            const auto& der = out.DER_Scheduled_AC_CLResControlMode;
+            REQUIRE(der.EVSETargetActivePower_L2_isUsed);
+            REQUIRE(der.EVSETargetActivePower_L3_isUsed);
+            REQUIRE(same_rational(der.EVSETargetActivePower_L2, dt::RationalNumber{2, 0}));
+            REQUIRE(same_rational(der.EVSETargetActivePower_L3, dt::RationalNumber{3, 0}));
+            REQUIRE(der.EVSETargetReactivePower_L2_isUsed);
+            REQUIRE(der.EVSETargetReactivePower_L3_isUsed);
+            REQUIRE(same_rational(der.EVSETargetReactivePower_L2, dt::RationalNumber{5, 0}));
+            REQUIRE(same_rational(der.EVSETargetReactivePower_L3, dt::RationalNumber{6, 0}));
+            REQUIRE(der.DSOQSetpoint_isUsed);
+            REQUIRE(der.DSOCosPhiSetpoint_isUsed);
+        }
+    }
+
+    GIVEN("A dynamic DER AC response with DSO setpoints") {
+        message_20::AC_ChargeLoopResponse res;
+        res.response_code = dt::ResponseCode::OK;
+
+        auto& control_mode = res.control_mode.emplace<Dynamic_DER_AC_Res>();
+        control_mode.target_active_power = dt::RationalNumber{1, 0};
+        control_mode.target_active_power_L2 = dt::RationalNumber{2, 0};
+        control_mode.target_active_power_L3 = dt::RationalNumber{3, 0};
+        control_mode.max_charge_power = dt::RationalNumber{22, 3};
+        control_mode.max_discharge_power = dt::RationalNumber{11, 3};
+        control_mode.dso_q_setpoint =
+            dt::DSOQSetpoint{dt::RationalNumber{7, 2}, std::nullopt, std::nullopt, false, dt::RationalNumber{0, 0}};
+        control_mode.dso_cos_phi_setpoint = dt::DSOCosPhiSetpoint{
+            dt::RationalNumber{95, -2}, std::nullopt, std::nullopt, dt::DERPowerFactorExcitation::UnderExcited, false,
+            dt::RationalNumber{0, 0}};
+
+        iso20_ac_AC_ChargeLoopResType out;
+        message_20::convert(res, out);
+
+        THEN("The generated cbv2g structure selects the dynamic DER branch") {
+            REQUIRE(out.DER_Dynamic_AC_CLResControlMode_isUsed);
+            const auto& der = out.DER_Dynamic_AC_CLResControlMode;
+            REQUIRE(der.EVSETargetActivePower_L3_isUsed);
+            REQUIRE(same_rational(der.EVSETargetActivePower_L3, dt::RationalNumber{3, 0}));
+            REQUIRE(der.DSOQSetpoint_isUsed);
+            REQUIRE(der.DSOCosPhiSetpoint_isUsed);
         }
     }
 }

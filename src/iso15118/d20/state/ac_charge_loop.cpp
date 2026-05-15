@@ -111,8 +111,23 @@ bool has_mandatory_ac_der_controls(const dt::DERControlFunctions& controls) {
 }
 
 bool has_configured_ac_der_setpoints(const dt::DERControlFunctions& controls, const AcDerControlConfig& config) {
-    (void)controls;
-    (void)config;
+    const auto is_non_negative = [](const dt::RationalNumber& value) { return dt::from_RationalNumber(value) >= 0.0f; };
+    const auto is_power_factor = [](const dt::RationalNumber& value) {
+        const auto cos_phi = dt::from_RationalNumber(value);
+        return cos_phi >= 0.0f and cos_phi <= 1.0f;
+    };
+
+    if (controls.dso_q_setpoint_provision and
+        not is_non_negative(config.dso_q_setpoint.step_response_time_constant_reactive_power)) {
+        return false;
+    }
+
+    if (controls.dso_cos_phi_setpoint_provision and
+        (not is_power_factor(config.dso_cos_phi_setpoint.value) or
+         not is_non_negative(config.dso_cos_phi_setpoint.step_response_time_constant_reactive_power))) {
+        return false;
+    }
+
     return true;
 }
 
