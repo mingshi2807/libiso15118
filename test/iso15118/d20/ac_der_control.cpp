@@ -5,6 +5,7 @@
 #include <iso15118/d20/ac_der_control.hpp>
 
 #include <optional>
+#include <string>
 
 namespace d20 = iso15118::d20;
 namespace dt = iso15118::message_20::datatypes;
@@ -26,9 +27,12 @@ SCENARIO("AC DER SECC control provider") {
         auto snapshots = d20::make_default_ac_der_secc_control_snapshots();
         auto provider = d20::make_secc_ac_der_control_provider(snapshots);
 
-        const auto config = provider->get_ac_der_control_config(
-            make_ac_der_context(snapshots.evse_capability.supported_control_functions));
+        const auto context = make_ac_der_context(snapshots.evse_capability.supported_control_functions);
+        const auto result = provider->get_ac_der_control_result(context);
+        const auto config = provider->get_ac_der_control_config(context);
 
+        REQUIRE(result.config.has_value());
+        REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::None);
         REQUIRE(config.has_value());
         REQUIRE(config->cpd_control.active_power_support.has_value());
         REQUIRE(config->cpd_control.active_power_support->volt_watt.has_value());
@@ -53,10 +57,11 @@ SCENARIO("AC DER SECC control provider") {
         snapshots.runtime_state.grid_policy_fresh = false;
         auto provider = d20::make_secc_ac_der_control_provider(snapshots);
 
-        const auto config = provider->get_ac_der_control_config(
+        const auto result = provider->get_ac_der_control_result(
             make_ac_der_context(snapshots.evse_capability.supported_control_functions));
 
-        REQUIRE_FALSE(config.has_value());
+        REQUIRE_FALSE(result.config.has_value());
+        REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::StaleGridPolicy);
     }
 
     GIVEN("a stale DSO control snapshot") {
@@ -64,10 +69,11 @@ SCENARIO("AC DER SECC control provider") {
         snapshots.runtime_state.dso_control_fresh = false;
         auto provider = d20::make_secc_ac_der_control_provider(snapshots);
 
-        const auto config = provider->get_ac_der_control_config(
+        const auto result = provider->get_ac_der_control_result(
             make_ac_der_context(snapshots.evse_capability.supported_control_functions));
 
-        REQUIRE_FALSE(config.has_value());
+        REQUIRE_FALSE(result.config.has_value());
+        REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::StaleDsoControl);
     }
 
     GIVEN("AC DER is disabled by application runtime state") {
@@ -75,10 +81,11 @@ SCENARIO("AC DER SECC control provider") {
         snapshots.runtime_state.ac_der_enabled = false;
         auto provider = d20::make_secc_ac_der_control_provider(snapshots);
 
-        const auto config = provider->get_ac_der_control_config(
+        const auto result = provider->get_ac_der_control_result(
             make_ac_der_context(snapshots.evse_capability.supported_control_functions));
 
-        REQUIRE_FALSE(config.has_value());
+        REQUIRE_FALSE(result.config.has_value());
+        REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::AcDerDisabled);
     }
 
     GIVEN("an invalid grid policy snapshot") {
@@ -86,10 +93,11 @@ SCENARIO("AC DER SECC control provider") {
         snapshots.grid_policy.valid = false;
         auto provider = d20::make_secc_ac_der_control_provider(snapshots);
 
-        const auto config = provider->get_ac_der_control_config(
+        const auto result = provider->get_ac_der_control_result(
             make_ac_der_context(snapshots.evse_capability.supported_control_functions));
 
-        REQUIRE_FALSE(config.has_value());
+        REQUIRE_FALSE(result.config.has_value());
+        REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::InvalidGridPolicy);
     }
 
     GIVEN("an invalid DSO control snapshot") {
@@ -97,10 +105,11 @@ SCENARIO("AC DER SECC control provider") {
         snapshots.dso_control.valid = false;
         auto provider = d20::make_secc_ac_der_control_provider(snapshots);
 
-        const auto config = provider->get_ac_der_control_config(
+        const auto result = provider->get_ac_der_control_result(
             make_ac_der_context(snapshots.evse_capability.supported_control_functions));
 
-        REQUIRE_FALSE(config.has_value());
+        REQUIRE_FALSE(result.config.has_value());
+        REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::InvalidDsoControl);
     }
 
     GIVEN("an invalid EVSE capability snapshot") {
@@ -108,10 +117,11 @@ SCENARIO("AC DER SECC control provider") {
         snapshots.evse_capability.valid = false;
         auto provider = d20::make_secc_ac_der_control_provider(snapshots);
 
-        const auto config = provider->get_ac_der_control_config(
+        const auto result = provider->get_ac_der_control_result(
             make_ac_der_context(snapshots.evse_capability.supported_control_functions));
 
-        REQUIRE_FALSE(config.has_value());
+        REQUIRE_FALSE(result.config.has_value());
+        REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::InvalidEvseCapability);
     }
 
     GIVEN("a selected AC_DER control function that is not supported by the EVSE capability snapshot") {
@@ -120,29 +130,70 @@ SCENARIO("AC DER SECC control provider") {
         snapshots.evse_capability.supported_control_functions.volt_watt = false;
         auto provider = d20::make_secc_ac_der_control_provider(snapshots);
 
-        const auto config = provider->get_ac_der_control_config(make_ac_der_context(selected_functions));
+        const auto result = provider->get_ac_der_control_result(make_ac_der_context(selected_functions));
 
-        REQUIRE_FALSE(config.has_value());
+        REQUIRE_FALSE(result.config.has_value());
+        REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::MissingSupportedMandatoryControlFunctions);
     }
 
     GIVEN("a non-AC_DER service context") {
         auto snapshots = d20::make_default_ac_der_secc_control_snapshots();
         auto provider = d20::make_secc_ac_der_control_provider(snapshots);
 
-        const auto config = provider->get_ac_der_control_config(
+        const auto result = provider->get_ac_der_control_result(
             {dt::ServiceCategory::AC_BPT, dt::ControlMode::Dynamic, dt::MobilityNeedsMode::ProvidedByEvcc,
              snapshots.evse_capability.supported_control_functions});
 
-        REQUIRE_FALSE(config.has_value());
+        REQUIRE_FALSE(result.config.has_value());
+        REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::NonAcDerServiceSelected);
     }
 
     GIVEN("an AC_DER context without negotiated DER control functions") {
         auto snapshots = d20::make_default_ac_der_secc_control_snapshots();
         auto provider = d20::make_secc_ac_der_control_provider(snapshots);
 
-        const auto config = provider->get_ac_der_control_config({dt::ServiceCategory::AC_DER, dt::ControlMode::Dynamic,
+        const auto result = provider->get_ac_der_control_result({dt::ServiceCategory::AC_DER, dt::ControlMode::Dynamic,
                                                                  dt::MobilityNeedsMode::ProvidedByEvcc, std::nullopt});
 
-        REQUIRE_FALSE(config.has_value());
+        REQUIRE_FALSE(result.config.has_value());
+        REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::MissingSelectedControlFunctions);
+    }
+
+    GIVEN("an AC_DER context with an incomplete mandatory selected control bitmap") {
+        auto snapshots = d20::make_default_ac_der_secc_control_snapshots();
+        auto selected_functions = snapshots.evse_capability.supported_control_functions;
+        selected_functions.zero_current = false;
+        auto provider = d20::make_secc_ac_der_control_provider(snapshots);
+
+        const auto result = provider->get_ac_der_control_result(make_ac_der_context(selected_functions));
+
+        REQUIRE_FALSE(result.config.has_value());
+        REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::MissingSelectedMandatoryControlFunctions);
+    }
+
+    GIVEN("a static AC DER provider result is requested") {
+        auto provider = d20::make_static_ac_der_control_provider(d20::make_default_ac_der_control_config());
+
+        const auto ac_der_result =
+            provider->get_ac_der_control_result({dt::ServiceCategory::AC_DER, dt::ControlMode::Dynamic,
+                                                 dt::MobilityNeedsMode::ProvidedByEvcc, std::nullopt});
+        const auto ac_bpt_result =
+            provider->get_ac_der_control_result({dt::ServiceCategory::AC_BPT, dt::ControlMode::Dynamic,
+                                                 dt::MobilityNeedsMode::ProvidedByEvcc, std::nullopt});
+
+        REQUIRE(ac_der_result.config.has_value());
+        REQUIRE(ac_der_result.failure_reason == d20::AcDerControlFailureReason::None);
+        REQUIRE_FALSE(ac_bpt_result.config.has_value());
+        REQUIRE(ac_bpt_result.failure_reason == d20::AcDerControlFailureReason::NonAcDerServiceSelected);
+    }
+
+    GIVEN("AC DER control failure reasons are formatted for application diagnostics") {
+        REQUIRE(d20::ac_der_control_failure_reason_to_string(d20::AcDerControlFailureReason::None) ==
+                std::string("none"));
+        REQUIRE(d20::ac_der_control_failure_reason_to_string(d20::AcDerControlFailureReason::StaleGridPolicy) ==
+                std::string("stale_grid_policy"));
+        REQUIRE(d20::ac_der_control_failure_reason_to_string(
+                    d20::AcDerControlFailureReason::MissingSupportedMandatoryControlFunctions) ==
+                std::string("missing_supported_mandatory_control_functions"));
     }
 }

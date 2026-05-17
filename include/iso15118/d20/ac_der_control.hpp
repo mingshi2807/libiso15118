@@ -19,6 +19,27 @@ struct AcDerControlConfig {
     dt::DSOCosPhiSetpoint dso_cos_phi_setpoint;
 };
 
+enum class AcDerControlFailureReason {
+    None,
+    Unknown,
+    NonAcDerServiceSelected,
+    MissingSelectedControlFunctions,
+    AcDerDisabled,
+    StaleGridPolicy,
+    StaleDsoControl,
+    InvalidGridPolicy,
+    InvalidDsoControl,
+    InvalidEvseCapability,
+    MissingSelectedMandatoryControlFunctions,
+    MissingSupportedMandatoryControlFunctions,
+    UnsupportedSelectedControlFunctions,
+};
+
+struct AcDerControlResult {
+    std::optional<AcDerControlConfig> config;
+    AcDerControlFailureReason failure_reason{AcDerControlFailureReason::None};
+};
+
 struct AcDerControlContext {
     dt::ServiceCategory selected_energy_service;
     dt::ControlMode selected_control_mode;
@@ -66,10 +87,12 @@ public:
     virtual ~IAcDerControlProvider() = default;
 
     virtual std::optional<AcDerControlConfig> get_ac_der_control_config(const AcDerControlContext& context) const = 0;
+    virtual AcDerControlResult get_ac_der_control_result(const AcDerControlContext& context) const;
 };
 
 AcDerControlConfig make_default_ac_der_control_config();
 bool has_required_ac_der_control_functions(const dt::DERControlFunctions& controls);
+const char* ac_der_control_failure_reason_to_string(AcDerControlFailureReason reason);
 std::shared_ptr<const IAcDerControlProvider> make_static_ac_der_control_provider(AcDerControlConfig config);
 AcDerSeccControlSnapshots make_default_ac_der_secc_control_snapshots();
 std::shared_ptr<const IAcDerControlProvider> make_secc_ac_der_control_provider(AcDerSeccControlSnapshots snapshots);

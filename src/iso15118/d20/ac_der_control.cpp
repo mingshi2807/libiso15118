@@ -26,11 +26,15 @@ public:
     }
 
     std::optional<AcDerControlConfig> get_ac_der_control_config(const AcDerControlContext& context) const override {
+        return get_ac_der_control_result(context).config;
+    }
+
+    AcDerControlResult get_ac_der_control_result(const AcDerControlContext& context) const override {
         if (context.selected_energy_service != dt::ServiceCategory::AC_DER) {
-            return std::nullopt;
+            return {std::nullopt, AcDerControlFailureReason::NonAcDerServiceSelected};
         }
 
-        return config;
+        return {config, AcDerControlFailureReason::None};
     }
 
 private:
@@ -102,6 +106,39 @@ bool has_required_ac_der_control_functions(const dt::DERControlFunctions& contro
            controls.over_voltage_fault_ride_through and controls.zero_current;
 }
 
+const char* ac_der_control_failure_reason_to_string(const AcDerControlFailureReason reason) {
+    switch (reason) {
+    case AcDerControlFailureReason::None:
+        return "none";
+    case AcDerControlFailureReason::Unknown:
+        return "unknown";
+    case AcDerControlFailureReason::NonAcDerServiceSelected:
+        return "non_ac_der_service_selected";
+    case AcDerControlFailureReason::MissingSelectedControlFunctions:
+        return "missing_selected_control_functions";
+    case AcDerControlFailureReason::AcDerDisabled:
+        return "ac_der_disabled";
+    case AcDerControlFailureReason::StaleGridPolicy:
+        return "stale_grid_policy";
+    case AcDerControlFailureReason::StaleDsoControl:
+        return "stale_dso_control";
+    case AcDerControlFailureReason::InvalidGridPolicy:
+        return "invalid_grid_policy";
+    case AcDerControlFailureReason::InvalidDsoControl:
+        return "invalid_dso_control";
+    case AcDerControlFailureReason::InvalidEvseCapability:
+        return "invalid_evse_capability";
+    case AcDerControlFailureReason::MissingSelectedMandatoryControlFunctions:
+        return "missing_selected_mandatory_control_functions";
+    case AcDerControlFailureReason::MissingSupportedMandatoryControlFunctions:
+        return "missing_supported_mandatory_control_functions";
+    case AcDerControlFailureReason::UnsupportedSelectedControlFunctions:
+        return "unsupported_selected_control_functions";
+    }
+
+    return "unknown";
+}
+
 namespace {
 
 bool supports_selected_controls(const dt::DERControlFunctions& selected, const dt::DERControlFunctions& supported) {
@@ -124,19 +161,57 @@ bool snapshots_are_usable(const AcDerSeccControlSnapshots& snapshots) {
            snapshots.evse_capability.valid;
 }
 
+AcDerControlFailureReason first_unusable_snapshot_reason(const AcDerSeccControlSnapshots& snapshots) {
+    if (not snapshots.runtime_state.ac_der_enabled) {
+        return AcDerControlFailureReason::AcDerDisabled;
+    }
+    if (not snapshots.runtime_state.grid_policy_fresh) {
+        return AcDerControlFailureReason::StaleGridPolicy;
+    }
+    if (not snapshots.runtime_state.dso_control_fresh) {
+        return AcDerControlFailureReason::StaleDsoControl;
+    }
+    if (not snapshots.grid_policy.valid) {
+        return AcDerControlFailureReason::InvalidGridPolicy;
+    }
+    if (not snapshots.dso_control.valid) {
+        return AcDerControlFailureReason::InvalidDsoControl;
+    }
+    if (not snapshots.evse_capability.valid) {
+        return AcDerControlFailureReason::InvalidEvseCapability;
+    }
+
+    return AcDerControlFailureReason::None;
+}
+
 class SeccAcDerControlProvider : public IAcDerControlProvider {
 public:
     explicit SeccAcDerControlProvider(AcDerSeccControlSnapshots snapshots_) : snapshots(std::move(snapshots_)) {
     }
 
     std::optional<AcDerControlConfig> get_ac_der_control_config(const AcDerControlContext& context) const override {
-        if (context.selected_energy_service != dt::ServiceCategory::AC_DER or
-            not context.selected_der_control_functions.has_value() or not snapshots_are_usable(snapshots) or
-            not has_required_ac_der_control_functions(*context.selected_der_control_functions) or
-            not has_required_ac_der_control_functions(snapshots.evse_capability.supported_control_functions) or
-            not supports_selected_controls(*context.selected_der_control_functions,
+        return get_ac_der_control_result(context).config;
+    }
+
+    AcDerControlResult get_ac_der_control_result(const AcDerControlContext& context) const override {
+        if (context.selected_energy_service != dt::ServiceCategory::AC_DER) {
+            return {std::nullopt, AcDerControlFailureReason::NonAcDerServiceSelected};
+        }
+        if (not context.selected_der_control_functions.has_value()) {
+            return {std::nullopt, AcDerControlFailureReason::MissingSelectedControlFunctions};
+        }
+        if (not snapshots_are_usable(snapshots)) {
+            return {std::nullopt, first_unusable_snapshot_reason(snapshots)};
+        }
+        if (not has_required_ac_der_control_functions(*context.selected_der_control_functions)) {
+            return {std::nullopt, AcDerControlFailureReason::MissingSelectedMandatoryControlFunctions};
+        }
+        if (not has_required_ac_der_control_functions(snapshots.evse_capability.supported_control_functions)) {
+            return {std::nullopt, AcDerControlFailureReason::MissingSupportedMandatoryControlFunctions};
+        }
+        if (not supports_selected_controls(*context.selected_der_control_functions,
                                            snapshots.evse_capability.supported_control_functions)) {
-            return std::nullopt;
+            return {std::nullopt, AcDerControlFailureReason::UnsupportedSelectedControlFunctions};
         }
 
         auto config = make_default_ac_der_control_config();
@@ -154,7 +229,7 @@ public:
         active_power_support.over_frequency_watt = make_frequency_watt(
             snapshots.grid_policy.over_frequency_watt_start_hz, snapshots.grid_policy.over_frequency_watt_stop_hz);
 
-        return config;
+        return {config, AcDerControlFailureReason::None};
     }
 
 private:
@@ -182,6 +257,15 @@ dt::ZeroCurrent make_zero_current() {
 }
 
 } // namespace
+
+AcDerControlResult IAcDerControlProvider::get_ac_der_control_result(const AcDerControlContext& context) const {
+    auto config = get_ac_der_control_config(context);
+    if (config.has_value()) {
+        return {config, AcDerControlFailureReason::None};
+    }
+
+    return {std::nullopt, AcDerControlFailureReason::Unknown};
+}
 
 AcDerControlConfig make_default_ac_der_control_config() {
     AcDerControlConfig config;

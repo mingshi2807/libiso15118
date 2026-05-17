@@ -88,6 +88,12 @@ public:
             {service, dt::ControlMode::Dynamic, dt::MobilityNeedsMode::ProvidedByEvcc, selected_functions});
     }
 
+    d20::AcDerControlResult request_result(dt::ServiceCategory service,
+                                           dt::DERControlFunctions selected_functions) const {
+        return provider->get_ac_der_control_result(
+            {service, dt::ControlMode::Dynamic, dt::MobilityNeedsMode::ProvidedByEvcc, selected_functions});
+    }
+
 private:
     d20::AcDerSeccControlSnapshots snapshots;
     std::shared_ptr<const d20::IAcDerControlProvider> provider;
@@ -116,29 +122,31 @@ SCENARIO("AC DER SECC application adapter boundary") {
         const SeccApplicationAdapter adapter(GridCodePolicy{}, DsoControlCommand{},
                                              EvseDerCapability{required_functions, true}, RuntimeHealth{});
 
-        const auto config = adapter.request_config(dt::ServiceCategory::AC_DER, required_functions);
+        const auto result = adapter.request_result(dt::ServiceCategory::AC_DER, required_functions);
 
-        REQUIRE(config.has_value());
-        require_mandatory_control_payloads(*config);
-        REQUIRE(value_of(config->cpd_control.active_power_support->volt_watt->u_start) == 242.0f);
-        REQUIRE(value_of(config->cpd_control.active_power_support->volt_watt->u_stop) == 254.0f);
-        REQUIRE(value_of(config->cpd_control.active_power_support->under_frequency_watt->f_start) == 49.7f);
-        REQUIRE(value_of(config->cpd_control.active_power_support->under_frequency_watt->f_stop) == 49.2f);
-        REQUIRE(value_of(config->cpd_control.active_power_support->over_frequency_watt->f_start) == 50.3f);
-        REQUIRE(value_of(config->cpd_control.active_power_support->over_frequency_watt->f_stop) == 50.8f);
-        REQUIRE(value_of(*config->cpd_control.maximum_level_dc_injection) == 0.3f);
-        REQUIRE(value_of(config->dso_q_setpoint.value) == 900.0f);
-        REQUIRE(value_of(config->dso_cos_phi_setpoint.value) == 0.97f);
-        REQUIRE(config->dso_cos_phi_setpoint.excitation == dt::DERPowerFactorExcitation::UnderExcited);
+        REQUIRE(result.config.has_value());
+        REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::None);
+        require_mandatory_control_payloads(*result.config);
+        REQUIRE(value_of(result.config->cpd_control.active_power_support->volt_watt->u_start) == 242.0f);
+        REQUIRE(value_of(result.config->cpd_control.active_power_support->volt_watt->u_stop) == 254.0f);
+        REQUIRE(value_of(result.config->cpd_control.active_power_support->under_frequency_watt->f_start) == 49.7f);
+        REQUIRE(value_of(result.config->cpd_control.active_power_support->under_frequency_watt->f_stop) == 49.2f);
+        REQUIRE(value_of(result.config->cpd_control.active_power_support->over_frequency_watt->f_start) == 50.3f);
+        REQUIRE(value_of(result.config->cpd_control.active_power_support->over_frequency_watt->f_stop) == 50.8f);
+        REQUIRE(value_of(*result.config->cpd_control.maximum_level_dc_injection) == 0.3f);
+        REQUIRE(value_of(result.config->dso_q_setpoint.value) == 900.0f);
+        REQUIRE(value_of(result.config->dso_cos_phi_setpoint.value) == 0.97f);
+        REQUIRE(result.config->dso_cos_phi_setpoint.excitation == dt::DERPowerFactorExcitation::UnderExcited);
     }
 
     GIVEN("fresh production application inputs but AC_BPT is selected") {
         const SeccApplicationAdapter adapter(GridCodePolicy{}, DsoControlCommand{},
                                              EvseDerCapability{required_functions, true}, RuntimeHealth{});
 
-        const auto config = adapter.request_config(dt::ServiceCategory::AC_BPT, required_functions);
+        const auto result = adapter.request_result(dt::ServiceCategory::AC_BPT, required_functions);
 
-        REQUIRE_FALSE(config.has_value());
+        REQUIRE_FALSE(result.config.has_value());
+        REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::NonAcDerServiceSelected);
     }
 
     GIVEN("an incomplete mandatory AC_DER IEC capability bitmap") {
@@ -147,9 +155,10 @@ SCENARIO("AC DER SECC application adapter boundary") {
         const SeccApplicationAdapter adapter(GridCodePolicy{}, DsoControlCommand{},
                                              EvseDerCapability{incomplete_functions, true}, RuntimeHealth{});
 
-        const auto config = adapter.request_config(dt::ServiceCategory::AC_DER, incomplete_functions);
+        const auto result = adapter.request_result(dt::ServiceCategory::AC_DER, required_functions);
 
-        REQUIRE_FALSE(config.has_value());
+        REQUIRE_FALSE(result.config.has_value());
+        REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::MissingSupportedMandatoryControlFunctions);
     }
 
     GIVEN("fresh EVSE capability but an incomplete EVCC-selected mandatory bitmap") {
@@ -158,9 +167,10 @@ SCENARIO("AC DER SECC application adapter boundary") {
         const SeccApplicationAdapter adapter(GridCodePolicy{}, DsoControlCommand{},
                                              EvseDerCapability{required_functions, true}, RuntimeHealth{});
 
-        const auto config = adapter.request_config(dt::ServiceCategory::AC_DER, incomplete_selected_functions);
+        const auto result = adapter.request_result(dt::ServiceCategory::AC_DER, incomplete_selected_functions);
 
-        REQUIRE_FALSE(config.has_value());
+        REQUIRE_FALSE(result.config.has_value());
+        REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::MissingSelectedMandatoryControlFunctions);
     }
 
     GIVEN("stale or invalid application inputs") {
