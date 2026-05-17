@@ -85,3 +85,22 @@ With examples enabled:
 cmake --build build-local-der --target example_ac_der_secc_provider
 ./build-local-der/examples/example_ac_der_secc_provider
 ```
+
+## Production-Facing Adapter Example
+
+See `examples/ac_der_secc_application_adapter.cpp` for a fuller SECC application-layer integration shape. It keeps
+application concepts separate from protocol concepts:
+
+- `GridCodePolicy`: VoltWatt, FrequencyWatt, and DC injection policy values
+- `DsoControlCommand`: DSOQ and DSOCosPhi setpoints
+- `EvseDerCapability`: supported AC_DER IEC control functions
+- `RuntimeHealth`: enablement and freshness gates
+
+The example translates those application inputs into `AcDerSeccControlSnapshots`, injects the provider into
+`EvseSetupConfig`, and verifies that the provider accepts an `AC_DER` selected-service context while rejecting an
+`AC_BPT` context.
+
+```bash
+cmake --build build-local-der --target example_ac_der_secc_application_adapter
+./build-local-der/examples/example_ac_der_secc_application_adapter
+```

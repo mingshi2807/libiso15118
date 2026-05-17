@@ -41,8 +41,9 @@ ChargeParameterDiscovery and ChargeLoop can obtain DER control data from the
 SECC policy layer at runtime.
 
 See [docs/ac_der_secc_provider.md](docs/ac_der_secc_provider.md) and the
-compilable example in
-[examples/ac_der_secc_provider.cpp](examples/ac_der_secc_provider.cpp).
+compilable examples in
+[examples/ac_der_secc_provider.cpp](examples/ac_der_secc_provider.cpp) and
+[examples/ac_der_secc_application_adapter.cpp](examples/ac_der_secc_application_adapter.cpp).
 
 ISO 15118 Support
 -----------------
