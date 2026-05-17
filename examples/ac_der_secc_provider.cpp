@@ -183,10 +183,7 @@ d20::EvseSetupConfig make_evse_setup_config(std::shared_ptr<const d20::IAcDerCon
 } // namespace
 
 int main() {
-    auto snapshots = d20::make_default_ac_der_secc_control_snapshots();
-    snapshots.grid_policy.volt_watt_start_voltage = {241, 0};
-    snapshots.dso_control.q_setpoint.value = {7, 2};
-    snapshots.dso_control.cos_phi_setpoint.value = {95, -2};
+    auto snapshots = d20::make_ac_der_iec_dynamic_eim_profile_snapshots();
 
     auto provider = d20::make_secc_ac_der_control_provider(snapshots);
     const auto setup = make_evse_setup_config(provider);

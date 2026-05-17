@@ -98,6 +98,7 @@ bool validate_ac_der_control_config(const AcDerControlConfig& config, const dt::
 const char* ac_der_control_failure_reason_to_string(AcDerControlFailureReason reason);
 std::shared_ptr<const IAcDerControlProvider> make_static_ac_der_control_provider(AcDerControlConfig config);
 AcDerSeccControlSnapshots make_default_ac_der_secc_control_snapshots();
+AcDerSeccControlSnapshots make_ac_der_iec_dynamic_eim_profile_snapshots();
 std::shared_ptr<const IAcDerControlProvider> make_secc_ac_der_control_provider(AcDerSeccControlSnapshots snapshots);
 
 } // namespace iso15118::d20

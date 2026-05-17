@@ -456,18 +456,18 @@ std::shared_ptr<const IAcDerControlProvider> make_static_ac_der_control_provider
 AcDerSeccControlSnapshots make_default_ac_der_secc_control_snapshots() {
     AcDerSeccControlSnapshots snapshots;
 
-    snapshots.grid_policy.volt_watt_start_voltage = {241, 0};
+    snapshots.grid_policy.volt_watt_start_voltage = {230, 0};
     snapshots.grid_policy.volt_watt_stop_voltage = {253, 0};
     snapshots.grid_policy.under_frequency_watt_start_hz = {498, -1};
     snapshots.grid_policy.under_frequency_watt_stop_hz = {495, -1};
     snapshots.grid_policy.over_frequency_watt_start_hz = {502, -1};
     snapshots.grid_policy.over_frequency_watt_stop_hz = {505, -1};
-    snapshots.grid_policy.maximum_dc_injection = {5, -1};
+    snapshots.grid_policy.maximum_dc_injection = zero();
     snapshots.grid_policy.valid = true;
 
-    snapshots.dso_control.q_setpoint = {{7, 2}, std::nullopt, std::nullopt, false, zero()};
+    snapshots.dso_control.q_setpoint = {zero(), std::nullopt, std::nullopt, false, zero()};
     snapshots.dso_control.cos_phi_setpoint = {
-        {95, -2}, std::nullopt, std::nullopt, dt::DERPowerFactorExcitation::UnderExcited, false, zero()};
+        one(), std::nullopt, std::nullopt, dt::DERPowerFactorExcitation::OverExcited, false, zero()};
     snapshots.dso_control.valid = true;
 
     snapshots.evse_capability.supported_control_functions = make_required_ac_der_control_functions();
@@ -476,6 +476,20 @@ AcDerSeccControlSnapshots make_default_ac_der_secc_control_snapshots() {
     snapshots.runtime_state.ac_der_enabled = true;
     snapshots.runtime_state.grid_policy_fresh = true;
     snapshots.runtime_state.dso_control_fresh = true;
+
+    return snapshots;
+}
+
+AcDerSeccControlSnapshots make_ac_der_iec_dynamic_eim_profile_snapshots() {
+    auto snapshots = make_default_ac_der_secc_control_snapshots();
+
+    snapshots.grid_policy.volt_watt_start_voltage = {241, 0};
+    snapshots.grid_policy.volt_watt_stop_voltage = {253, 0};
+    snapshots.grid_policy.maximum_dc_injection = {5, -1};
+
+    snapshots.dso_control.q_setpoint = {{7, 2}, std::nullopt, std::nullopt, false, zero()};
+    snapshots.dso_control.cos_phi_setpoint = {
+        {95, -2}, std::nullopt, std::nullopt, dt::DERPowerFactorExcitation::UnderExcited, false, zero()};
 
     return snapshots;
 }

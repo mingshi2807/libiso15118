@@ -23,7 +23,7 @@ d20::AcDerControlContext make_ac_der_context(const dt::DERControlFunctions& func
 } // namespace
 
 SCENARIO("AC DER SECC control provider") {
-    GIVEN("valid fresh SECC snapshots and a selected AC_DER service") {
+    GIVEN("valid generic SECC snapshots and a selected AC_DER service") {
         auto snapshots = d20::make_default_ac_der_secc_control_snapshots();
         auto provider = d20::make_secc_ac_der_control_provider(snapshots);
 
@@ -46,10 +46,32 @@ SCENARIO("AC DER SECC control provider") {
         REQUIRE(config->cpd_control.undervoltage_fault_ride_through.has_value());
         REQUIRE(config->cpd_control.zero_current.has_value());
         REQUIRE(config->cpd_control.maximum_level_dc_injection.has_value());
+        REQUIRE(value_of(config->cpd_control.active_power_support->volt_watt->u_start) == 230.0f);
+        REQUIRE(value_of(*config->cpd_control.maximum_level_dc_injection) == 0.0f);
+        REQUIRE(value_of(config->dso_q_setpoint.value) == 0.0f);
+        REQUIRE(value_of(config->dso_cos_phi_setpoint.value) == 1.0f);
+    }
+
+    GIVEN("AC_DER_IEC Dynamic EIM profile snapshots and a selected AC_DER service") {
+        auto snapshots = d20::make_ac_der_iec_dynamic_eim_profile_snapshots();
+        auto provider = d20::make_secc_ac_der_control_provider(snapshots);
+
+        const auto context = make_ac_der_context(snapshots.evse_capability.supported_control_functions);
+        const auto result = provider->get_ac_der_control_result(context);
+        const auto config = provider->get_ac_der_control_config(context);
+
+        REQUIRE(result.config.has_value());
+        REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::None);
+        REQUIRE(config.has_value());
+        REQUIRE(config->cpd_control.active_power_support.has_value());
+        REQUIRE(config->cpd_control.active_power_support->volt_watt.has_value());
+        REQUIRE(config->cpd_control.maximum_level_dc_injection.has_value());
         REQUIRE(value_of(config->cpd_control.active_power_support->volt_watt->u_start) == 241.0f);
+        REQUIRE(value_of(config->cpd_control.active_power_support->volt_watt->u_stop) == 253.0f);
         REQUIRE(value_of(*config->cpd_control.maximum_level_dc_injection) == 0.5f);
         REQUIRE(value_of(config->dso_q_setpoint.value) == 700.0f);
         REQUIRE(value_of(config->dso_cos_phi_setpoint.value) == 0.95f);
+        REQUIRE(config->dso_cos_phi_setpoint.excitation == dt::DERPowerFactorExcitation::UnderExcited);
     }
 
     GIVEN("a stale grid policy snapshot") {

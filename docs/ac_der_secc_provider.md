@@ -44,6 +44,14 @@ snapshots.dso_control.cos_phi_setpoint = ...;
 auto provider = iso15118::d20::make_secc_ac_der_control_provider(snapshots);
 ```
 
+`make_default_ac_der_secc_control_snapshots()` is a generic, protocol-valid scaffold. It deliberately uses neutral
+DSO values such as zero reactive-power setpoint, unity cos phi, and zero DC injection restriction so client policy is
+not hidden in the default path.
+
+Use `make_ac_der_iec_dynamic_eim_profile_snapshots()` only when the AC_DER_IEC Dynamic EIM demo/client profile is the
+intended test input. Production SECC applications should replace both helpers with snapshots built from live or
+validated application data.
+
 Use `AcDerSeccControlSnapshots` as the boundary between the SECC application and the protocol stack:
 
 - `AcDerGridPolicySnapshot`: VoltWatt, FrequencyWatt, and DC injection restriction values
@@ -73,6 +81,8 @@ The provider is stored as `std::shared_ptr<const IAcDerControlProvider>`. It mus
 - `AC_ChargeLoop` asks the provider for `AcDerControlConfig` and uses `dso_q_setpoint` and `dso_cos_phi_setpoint`.
 - `AC_BPT` and plain `AC` request paths do not consume AC_DER provider data.
 - `make_default_ac_der_control_config()` and `make_static_ac_der_control_provider()` are compatibility/demo helpers, not a production policy implementation.
+- `make_default_ac_der_secc_control_snapshots()` is a neutral scaffold; it is not a client profile.
+- `make_ac_der_iec_dynamic_eim_profile_snapshots()` is the explicit AC_DER_IEC Dynamic EIM demo/client profile seed.
 - `make_secc_ac_der_control_provider()` is the preferred application-layer adapter for SECC integration tests and production-readiness demos.
 
 ## Compilable Example
