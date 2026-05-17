@@ -108,6 +108,8 @@ SCENARIO("AC DER SECC control provider") {
 
         REQUIRE_FALSE(result.config.has_value());
         REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::AcDerDisabled);
+        REQUIRE(d20::validate_ac_der_secc_control_snapshots(snapshots) ==
+                d20::AcDerControlFailureReason::AcDerDisabled);
     }
 
     GIVEN("an invalid grid policy snapshot") {
@@ -222,6 +224,8 @@ SCENARIO("AC DER SECC control provider") {
 
         REQUIRE_FALSE(result.config.has_value());
         REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::MissingSupportedMandatoryControlFunctions);
+        REQUIRE(d20::validate_ac_der_secc_control_snapshots(snapshots) ==
+                d20::AcDerControlFailureReason::MissingSupportedMandatoryControlFunctions);
     }
 
     GIVEN("a non-AC_DER service context") {
@@ -245,6 +249,23 @@ SCENARIO("AC DER SECC control provider") {
 
         REQUIRE_FALSE(result.config.has_value());
         REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::MissingSelectedControlFunctions);
+    }
+
+    GIVEN("an AC_DER context outside the Dynamic EVCC-provided contract") {
+        auto snapshots = d20::make_default_ac_der_secc_control_snapshots();
+        auto provider = d20::make_secc_ac_der_control_provider(snapshots);
+
+        const auto scheduled_result = provider->get_ac_der_control_result(
+            {dt::ServiceCategory::AC_DER, dt::ControlMode::Scheduled, dt::MobilityNeedsMode::ProvidedByEvcc,
+             snapshots.evse_capability.supported_control_functions});
+        const auto secc_mobility_result = provider->get_ac_der_control_result(
+            {dt::ServiceCategory::AC_DER, dt::ControlMode::Dynamic, dt::MobilityNeedsMode::ProvidedBySecc,
+             snapshots.evse_capability.supported_control_functions});
+
+        REQUIRE_FALSE(scheduled_result.config.has_value());
+        REQUIRE(scheduled_result.failure_reason == d20::AcDerControlFailureReason::UnsupportedControlMode);
+        REQUIRE_FALSE(secc_mobility_result.config.has_value());
+        REQUIRE(secc_mobility_result.failure_reason == d20::AcDerControlFailureReason::UnsupportedMobilityNeedsMode);
     }
 
     GIVEN("an AC_DER context with an incomplete mandatory selected control bitmap") {
@@ -329,6 +350,11 @@ SCENARIO("AC DER SECC control provider") {
                 std::string("none"));
         REQUIRE(d20::ac_der_control_failure_reason_to_string(d20::AcDerControlFailureReason::StaleGridPolicy) ==
                 std::string("stale_grid_policy"));
+        REQUIRE(d20::ac_der_control_failure_reason_to_string(d20::AcDerControlFailureReason::UnsupportedControlMode) ==
+                std::string("unsupported_control_mode"));
+        REQUIRE(d20::ac_der_control_failure_reason_to_string(
+                    d20::AcDerControlFailureReason::UnsupportedMobilityNeedsMode) ==
+                std::string("unsupported_mobility_needs_mode"));
         REQUIRE(d20::ac_der_control_failure_reason_to_string(
                     d20::AcDerControlFailureReason::MissingSupportedMandatoryControlFunctions) ==
                 std::string("missing_supported_mandatory_control_functions"));

@@ -30,6 +30,13 @@ The provider receives the selected session context:
 - `selected_mobility_needs_mode`
 - `selected_der_control_functions`
 
+The built-in SECC snapshot provider is intentionally scoped to the current production target:
+
+- `selected_energy_service == AC_DER`
+- `selected_control_mode == Dynamic`
+- `selected_mobility_needs_mode == ProvidedByEvcc`
+- all mandatory AC_DER IEC control functions negotiated and supported
+
 Return `std::nullopt` when the current SECC application state cannot support AC_DER. When `AC_DER` is selected, this makes ChargeParameterDiscovery or ChargeLoop fail explicitly instead of silently sending incomplete DER data.
 
 For the first production integration shape, the library also provides a snapshot adapter:
@@ -42,6 +49,15 @@ snapshots.dso_control.q_setpoint = ...;
 snapshots.dso_control.cos_phi_setpoint = ...;
 
 auto provider = iso15118::d20::make_secc_ac_der_control_provider(snapshots);
+```
+
+Applications can preflight the snapshots before session injection:
+
+```cpp
+const auto reason = iso15118::d20::validate_ac_der_secc_control_snapshots(snapshots);
+if (reason != iso15118::d20::AcDerControlFailureReason::None) {
+    // keep AC_DER disabled, refresh policy data, or report a SECC application fault
+}
 ```
 
 `make_default_ac_der_secc_control_snapshots()` is a generic, protocol-valid scaffold. It deliberately uses neutral
@@ -59,7 +75,10 @@ Use `AcDerSeccControlSnapshots` as the boundary between the SECC application and
 - `AcDerEvseCapabilitySnapshot`: supported AC_DER IEC control-function bitmap
 - `AcDerRuntimeStateSnapshot`: AC_DER enablement and freshness gates
 
-The adapter returns `std::nullopt` if the selected service is not AC_DER, selected DER functions are missing, policy snapshots are invalid/stale, or the EVCC-selected functions exceed EVSE capability.
+The adapter returns `std::nullopt` if the selected service is not AC_DER, the selected mode is outside the Dynamic
+EVCC-provided scope, selected DER functions are missing, policy snapshots are invalid/stale, or the EVCC-selected
+functions exceed EVSE capability. Use `get_ac_der_control_result()` when the application needs a precise
+`AcDerControlFailureReason` for logs, telemetry, or diagnostics.
 
 ## Session Injection
 
@@ -80,6 +99,8 @@ The provider is stored as `std::shared_ptr<const IAcDerControlProvider>`. It mus
 - `AC_ChargeParameterDiscovery` asks the provider for `AcDerControlConfig` and uses `cpd_control`.
 - `AC_ChargeLoop` asks the provider for `AcDerControlConfig` and uses `dso_q_setpoint` and `dso_cos_phi_setpoint`.
 - `AC_BPT` and plain `AC` request paths do not consume AC_DER provider data.
+- The built-in SECC snapshot provider rejects scheduled AC_DER and SECC-provided mobility-needs contexts until those
+  scopes are implemented deliberately.
 - `make_default_ac_der_control_config()` and `make_static_ac_der_control_provider()` are compatibility/demo helpers, not a production policy implementation.
 - `make_default_ac_der_secc_control_snapshots()` is a neutral scaffold; it is not a client profile.
 - `make_ac_der_iec_dynamic_eim_profile_snapshots()` is the explicit AC_DER_IEC Dynamic EIM demo/client profile seed.

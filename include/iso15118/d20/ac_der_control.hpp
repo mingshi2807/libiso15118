@@ -23,6 +23,8 @@ enum class AcDerControlFailureReason {
     None,
     Unknown,
     NonAcDerServiceSelected,
+    UnsupportedControlMode,
+    UnsupportedMobilityNeedsMode,
     MissingSelectedControlFunctions,
     AcDerDisabled,
     StaleGridPolicy,
@@ -95,6 +97,7 @@ bool has_required_ac_der_control_functions(const dt::DERControlFunctions& contro
 bool validate_ac_der_grid_policy_snapshot(const AcDerGridPolicySnapshot& grid_policy);
 bool validate_ac_der_dso_control_snapshot(const AcDerDsoControlSnapshot& dso_control);
 bool validate_ac_der_control_config(const AcDerControlConfig& config, const dt::DERControlFunctions& controls);
+AcDerControlFailureReason validate_ac_der_secc_control_snapshots(const AcDerSeccControlSnapshots& snapshots);
 const char* ac_der_control_failure_reason_to_string(AcDerControlFailureReason reason);
 std::shared_ptr<const IAcDerControlProvider> make_static_ac_der_control_provider(AcDerControlConfig config);
 AcDerSeccControlSnapshots make_default_ac_der_secc_control_snapshots();

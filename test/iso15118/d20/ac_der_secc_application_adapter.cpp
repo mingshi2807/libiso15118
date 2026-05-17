@@ -94,6 +94,16 @@ public:
             {service, dt::ControlMode::Dynamic, dt::MobilityNeedsMode::ProvidedByEvcc, selected_functions});
     }
 
+    d20::AcDerControlResult request_result(dt::ServiceCategory service, dt::ControlMode control_mode,
+                                           dt::MobilityNeedsMode mobility_needs_mode,
+                                           dt::DERControlFunctions selected_functions) const {
+        return provider->get_ac_der_control_result({service, control_mode, mobility_needs_mode, selected_functions});
+    }
+
+    d20::AcDerControlFailureReason validate_snapshots() const {
+        return d20::validate_ac_der_secc_control_snapshots(snapshots);
+    }
+
 private:
     d20::AcDerSeccControlSnapshots snapshots;
     std::shared_ptr<const d20::IAcDerControlProvider> provider;
@@ -124,6 +134,7 @@ SCENARIO("AC DER SECC application adapter boundary") {
 
         const auto result = adapter.request_result(dt::ServiceCategory::AC_DER, required_functions);
 
+        REQUIRE(adapter.validate_snapshots() == d20::AcDerControlFailureReason::None);
         REQUIRE(result.config.has_value());
         REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::None);
         require_mandatory_control_payloads(*result.config);
@@ -149,6 +160,22 @@ SCENARIO("AC DER SECC application adapter boundary") {
         REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::NonAcDerServiceSelected);
     }
 
+    GIVEN("fresh production application inputs but the selected AC_DER mode is outside Dynamic EVCC-provided scope") {
+        const SeccApplicationAdapter adapter(GridCodePolicy{}, DsoControlCommand{},
+                                             EvseDerCapability{required_functions, true}, RuntimeHealth{});
+
+        const auto scheduled_result = adapter.request_result(dt::ServiceCategory::AC_DER, dt::ControlMode::Scheduled,
+                                                             dt::MobilityNeedsMode::ProvidedByEvcc, required_functions);
+        const auto secc_mobility_result =
+            adapter.request_result(dt::ServiceCategory::AC_DER, dt::ControlMode::Dynamic,
+                                   dt::MobilityNeedsMode::ProvidedBySecc, required_functions);
+
+        REQUIRE_FALSE(scheduled_result.config.has_value());
+        REQUIRE(scheduled_result.failure_reason == d20::AcDerControlFailureReason::UnsupportedControlMode);
+        REQUIRE_FALSE(secc_mobility_result.config.has_value());
+        REQUIRE(secc_mobility_result.failure_reason == d20::AcDerControlFailureReason::UnsupportedMobilityNeedsMode);
+    }
+
     GIVEN("an incomplete mandatory AC_DER IEC capability bitmap") {
         auto incomplete_functions = required_functions;
         incomplete_functions.volt_watt = false;
@@ -157,6 +184,8 @@ SCENARIO("AC DER SECC application adapter boundary") {
 
         const auto result = adapter.request_result(dt::ServiceCategory::AC_DER, required_functions);
 
+        REQUIRE(adapter.validate_snapshots() ==
+                d20::AcDerControlFailureReason::MissingSupportedMandatoryControlFunctions);
         REQUIRE_FALSE(result.config.has_value());
         REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::MissingSupportedMandatoryControlFunctions);
     }

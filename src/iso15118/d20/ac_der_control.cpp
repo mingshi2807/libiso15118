@@ -119,6 +119,10 @@ const char* ac_der_control_failure_reason_to_string(const AcDerControlFailureRea
         return "unknown";
     case AcDerControlFailureReason::NonAcDerServiceSelected:
         return "non_ac_der_service_selected";
+    case AcDerControlFailureReason::UnsupportedControlMode:
+        return "unsupported_control_mode";
+    case AcDerControlFailureReason::UnsupportedMobilityNeedsMode:
+        return "unsupported_mobility_needs_mode";
     case AcDerControlFailureReason::MissingSelectedControlFunctions:
         return "missing_selected_control_functions";
     case AcDerControlFailureReason::AcDerDisabled:
@@ -160,36 +164,6 @@ bool supports_selected_controls(const dt::DERControlFunctions& selected, const d
            (not selected.zero_current or supported.zero_current);
 }
 
-bool snapshots_are_usable(const AcDerSeccControlSnapshots& snapshots) {
-    return snapshots.runtime_state.ac_der_enabled and snapshots.runtime_state.grid_policy_fresh and
-           snapshots.runtime_state.dso_control_fresh and snapshots.grid_policy.valid and snapshots.dso_control.valid and
-           snapshots.evse_capability.valid and validate_ac_der_grid_policy_snapshot(snapshots.grid_policy) and
-           validate_ac_der_dso_control_snapshot(snapshots.dso_control);
-}
-
-AcDerControlFailureReason first_unusable_snapshot_reason(const AcDerSeccControlSnapshots& snapshots) {
-    if (not snapshots.runtime_state.ac_der_enabled) {
-        return AcDerControlFailureReason::AcDerDisabled;
-    }
-    if (not snapshots.runtime_state.grid_policy_fresh) {
-        return AcDerControlFailureReason::StaleGridPolicy;
-    }
-    if (not snapshots.runtime_state.dso_control_fresh) {
-        return AcDerControlFailureReason::StaleDsoControl;
-    }
-    if (not snapshots.grid_policy.valid or not validate_ac_der_grid_policy_snapshot(snapshots.grid_policy)) {
-        return AcDerControlFailureReason::InvalidGridPolicy;
-    }
-    if (not snapshots.dso_control.valid or not validate_ac_der_dso_control_snapshot(snapshots.dso_control)) {
-        return AcDerControlFailureReason::InvalidDsoControl;
-    }
-    if (not snapshots.evse_capability.valid) {
-        return AcDerControlFailureReason::InvalidEvseCapability;
-    }
-
-    return AcDerControlFailureReason::None;
-}
-
 class SeccAcDerControlProvider : public IAcDerControlProvider {
 public:
     explicit SeccAcDerControlProvider(AcDerSeccControlSnapshots snapshots_) : snapshots(std::move(snapshots_)) {
@@ -203,21 +177,25 @@ public:
         if (context.selected_energy_service != dt::ServiceCategory::AC_DER) {
             return {std::nullopt, AcDerControlFailureReason::NonAcDerServiceSelected};
         }
+        if (context.selected_control_mode != dt::ControlMode::Dynamic) {
+            return {std::nullopt, AcDerControlFailureReason::UnsupportedControlMode};
+        }
+        if (context.selected_mobility_needs_mode != dt::MobilityNeedsMode::ProvidedByEvcc) {
+            return {std::nullopt, AcDerControlFailureReason::UnsupportedMobilityNeedsMode};
+        }
         if (not context.selected_der_control_functions.has_value()) {
             return {std::nullopt, AcDerControlFailureReason::MissingSelectedControlFunctions};
         }
-        if (not snapshots_are_usable(snapshots)) {
-            return {std::nullopt, first_unusable_snapshot_reason(snapshots)};
-        }
-        if (not has_required_ac_der_control_functions(*context.selected_der_control_functions)) {
-            return {std::nullopt, AcDerControlFailureReason::MissingSelectedMandatoryControlFunctions};
-        }
-        if (not has_required_ac_der_control_functions(snapshots.evse_capability.supported_control_functions)) {
-            return {std::nullopt, AcDerControlFailureReason::MissingSupportedMandatoryControlFunctions};
+        const auto snapshot_failure_reason = validate_ac_der_secc_control_snapshots(snapshots);
+        if (snapshot_failure_reason != AcDerControlFailureReason::None) {
+            return {std::nullopt, snapshot_failure_reason};
         }
         if (not supports_selected_controls(*context.selected_der_control_functions,
                                            snapshots.evse_capability.supported_control_functions)) {
             return {std::nullopt, AcDerControlFailureReason::UnsupportedSelectedControlFunctions};
+        }
+        if (not has_required_ac_der_control_functions(*context.selected_der_control_functions)) {
+            return {std::nullopt, AcDerControlFailureReason::MissingSelectedMandatoryControlFunctions};
         }
 
         auto config = make_default_ac_der_control_config();
@@ -418,6 +396,32 @@ bool validate_ac_der_control_config(const AcDerControlConfig& config, const dt::
                                                       is_non_negative(*der_control.maximum_level_dc_injection))) and
            (not controls.dso_q_setpoint_provision or validate_dso_q_setpoint(config.dso_q_setpoint)) and
            (not controls.dso_cos_phi_setpoint_provision or validate_dso_cos_phi_setpoint(config.dso_cos_phi_setpoint));
+}
+
+AcDerControlFailureReason validate_ac_der_secc_control_snapshots(const AcDerSeccControlSnapshots& snapshots) {
+    if (not snapshots.runtime_state.ac_der_enabled) {
+        return AcDerControlFailureReason::AcDerDisabled;
+    }
+    if (not snapshots.runtime_state.grid_policy_fresh) {
+        return AcDerControlFailureReason::StaleGridPolicy;
+    }
+    if (not snapshots.runtime_state.dso_control_fresh) {
+        return AcDerControlFailureReason::StaleDsoControl;
+    }
+    if (not snapshots.grid_policy.valid or not validate_ac_der_grid_policy_snapshot(snapshots.grid_policy)) {
+        return AcDerControlFailureReason::InvalidGridPolicy;
+    }
+    if (not snapshots.dso_control.valid or not validate_ac_der_dso_control_snapshot(snapshots.dso_control)) {
+        return AcDerControlFailureReason::InvalidDsoControl;
+    }
+    if (not snapshots.evse_capability.valid) {
+        return AcDerControlFailureReason::InvalidEvseCapability;
+    }
+    if (not has_required_ac_der_control_functions(snapshots.evse_capability.supported_control_functions)) {
+        return AcDerControlFailureReason::MissingSupportedMandatoryControlFunctions;
+    }
+
+    return AcDerControlFailureReason::None;
 }
 
 AcDerControlConfig make_default_ac_der_control_config() {

@@ -178,6 +178,13 @@ int main() {
 
     const SeccApplicationAcDerAdapter adapter(GridCodePolicy{}, DsoControlCommand{},
                                               EvseDerCapability{required_functions, true}, RuntimeHealth{});
+    const auto snapshot_validation = d20::validate_ac_der_secc_control_snapshots(adapter.get_snapshots());
+    std::cout << "snapshot preflight: " << d20::ac_der_control_failure_reason_to_string(snapshot_validation) << "\n";
+    if (snapshot_validation != d20::AcDerControlFailureReason::None) {
+        std::cerr << "SECC AC DER adapter demo failed snapshot preflight\n";
+        return 1;
+    }
+
     const auto session_config = adapter.make_session_config();
 
     print_runtime_gates(adapter.get_snapshots());
