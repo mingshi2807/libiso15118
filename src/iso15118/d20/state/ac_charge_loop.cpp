@@ -107,27 +107,6 @@ bool has_mandatory_ac_der_controls(const dt::DERControlFunctions& controls) {
     return has_required_ac_der_control_functions(controls);
 }
 
-bool has_configured_ac_der_setpoints(const dt::DERControlFunctions& controls, const AcDerControlConfig& config) {
-    const auto is_non_negative = [](const dt::RationalNumber& value) { return dt::from_RationalNumber(value) >= 0.0f; };
-    const auto is_power_factor = [](const dt::RationalNumber& value) {
-        const auto cos_phi = dt::from_RationalNumber(value);
-        return cos_phi >= 0.0f and cos_phi <= 1.0f;
-    };
-
-    if (controls.dso_q_setpoint_provision and
-        not is_non_negative(config.dso_q_setpoint.step_response_time_constant_reactive_power)) {
-        return false;
-    }
-
-    if (controls.dso_cos_phi_setpoint_provision and
-        (not is_power_factor(config.dso_cos_phi_setpoint.value) or
-         not is_non_negative(config.dso_cos_phi_setpoint.step_response_time_constant_reactive_power))) {
-        return false;
-    }
-
-    return true;
-}
-
 template <typename Res>
 void fill_der_control_setpoints(Res& out, const AcDerControlConfig& config, const dt::DERControlFunctions& controls) {
     if (controls.dso_q_setpoint_provision) {
@@ -226,7 +205,7 @@ AcChargeLoopResult handle_request_with_diagnostics(const message_20::AC_ChargeLo
         if (not ac_der_control_result.config.has_value()) {
             return failed_ac_der_result(res, dt::ResponseCode::FAILED, ac_der_control_result.failure_reason);
         }
-        if (not has_configured_ac_der_setpoints(controls, ac_der_control_result.config.value())) {
+        if (not validate_ac_der_control_config(ac_der_control_result.config.value(), controls)) {
             return failed_ac_der_result(res, dt::ResponseCode::FAILED, AcDerControlFailureReason::InvalidDsoControl);
         }
 
@@ -285,7 +264,7 @@ AcChargeLoopResult handle_request_with_diagnostics(const message_20::AC_ChargeLo
         if (not ac_der_control_result.config.has_value()) {
             return failed_ac_der_result(res, dt::ResponseCode::FAILED, ac_der_control_result.failure_reason);
         }
-        if (not has_configured_ac_der_setpoints(controls, ac_der_control_result.config.value())) {
+        if (not validate_ac_der_control_config(ac_der_control_result.config.value(), controls)) {
             return failed_ac_der_result(res, dt::ResponseCode::FAILED, AcDerControlFailureReason::InvalidDsoControl);
         }
 

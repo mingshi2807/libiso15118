@@ -100,6 +100,34 @@ SCENARIO("AC DER SECC control provider") {
         REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::InvalidGridPolicy);
     }
 
+    GIVEN("a grid policy snapshot with reversed VoltWatt voltage thresholds") {
+        auto snapshots = d20::make_default_ac_der_secc_control_snapshots();
+        snapshots.grid_policy.volt_watt_start_voltage = {253, 0};
+        snapshots.grid_policy.volt_watt_stop_voltage = {241, 0};
+        auto provider = d20::make_secc_ac_der_control_provider(snapshots);
+
+        const auto result = provider->get_ac_der_control_result(
+            make_ac_der_context(snapshots.evse_capability.supported_control_functions));
+
+        REQUIRE_FALSE(d20::validate_ac_der_grid_policy_snapshot(snapshots.grid_policy));
+        REQUIRE_FALSE(result.config.has_value());
+        REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::InvalidGridPolicy);
+    }
+
+    GIVEN("a grid policy snapshot with reversed under-frequency thresholds") {
+        auto snapshots = d20::make_default_ac_der_secc_control_snapshots();
+        snapshots.grid_policy.under_frequency_watt_start_hz = {495, -1};
+        snapshots.grid_policy.under_frequency_watt_stop_hz = {498, -1};
+        auto provider = d20::make_secc_ac_der_control_provider(snapshots);
+
+        const auto result = provider->get_ac_der_control_result(
+            make_ac_der_context(snapshots.evse_capability.supported_control_functions));
+
+        REQUIRE_FALSE(d20::validate_ac_der_grid_policy_snapshot(snapshots.grid_policy));
+        REQUIRE_FALSE(result.config.has_value());
+        REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::InvalidGridPolicy);
+    }
+
     GIVEN("an invalid DSO control snapshot") {
         auto snapshots = d20::make_default_ac_der_secc_control_snapshots();
         snapshots.dso_control.valid = false;
@@ -108,6 +136,32 @@ SCENARIO("AC DER SECC control provider") {
         const auto result = provider->get_ac_der_control_result(
             make_ac_der_context(snapshots.evse_capability.supported_control_functions));
 
+        REQUIRE_FALSE(result.config.has_value());
+        REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::InvalidDsoControl);
+    }
+
+    GIVEN("a DSO control snapshot with invalid cos phi") {
+        auto snapshots = d20::make_default_ac_der_secc_control_snapshots();
+        snapshots.dso_control.cos_phi_setpoint.value = {101, -2};
+        auto provider = d20::make_secc_ac_der_control_provider(snapshots);
+
+        const auto result = provider->get_ac_der_control_result(
+            make_ac_der_context(snapshots.evse_capability.supported_control_functions));
+
+        REQUIRE_FALSE(d20::validate_ac_der_dso_control_snapshot(snapshots.dso_control));
+        REQUIRE_FALSE(result.config.has_value());
+        REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::InvalidDsoControl);
+    }
+
+    GIVEN("a DSO control snapshot with negative response time") {
+        auto snapshots = d20::make_default_ac_der_secc_control_snapshots();
+        snapshots.dso_control.q_setpoint.step_response_time_constant_reactive_power = {-1, 0};
+        auto provider = d20::make_secc_ac_der_control_provider(snapshots);
+
+        const auto result = provider->get_ac_der_control_result(
+            make_ac_der_context(snapshots.evse_capability.supported_control_functions));
+
+        REQUIRE_FALSE(d20::validate_ac_der_dso_control_snapshot(snapshots.dso_control));
         REQUIRE_FALSE(result.config.has_value());
         REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::InvalidDsoControl);
     }
@@ -209,6 +263,43 @@ SCENARIO("AC DER SECC control provider") {
         REQUIRE(ac_der_result.failure_reason == d20::AcDerControlFailureReason::None);
         REQUIRE_FALSE(ac_bpt_result.config.has_value());
         REQUIRE(ac_bpt_result.failure_reason == d20::AcDerControlFailureReason::NonAcDerServiceSelected);
+    }
+
+    GIVEN("a default AC DER control config is production-valid for mandatory controls") {
+        const auto snapshots = d20::make_default_ac_der_secc_control_snapshots();
+        const auto config = d20::make_default_ac_der_control_config();
+
+        REQUIRE(d20::validate_ac_der_control_config(config, snapshots.evse_capability.supported_control_functions));
+    }
+
+    GIVEN("an AC DER control config with reversed VoltWatt thresholds") {
+        const auto snapshots = d20::make_default_ac_der_secc_control_snapshots();
+        auto config = d20::make_default_ac_der_control_config();
+        config.cpd_control.active_power_support->volt_watt->u_start = {253, 0};
+        config.cpd_control.active_power_support->volt_watt->u_stop = {241, 0};
+
+        REQUIRE_FALSE(
+            d20::validate_ac_der_control_config(config, snapshots.evse_capability.supported_control_functions));
+    }
+
+    GIVEN("an AC DER control config with a non-monotonic VoltVar curve") {
+        const auto snapshots = d20::make_default_ac_der_secc_control_snapshots();
+        auto config = d20::make_default_ac_der_control_config();
+        auto& curve = *config.cpd_control.reactive_power_support->volt_var;
+        curve.curve_data_points[1].x_value = curve.curve_data_points[0].x_value;
+
+        REQUIRE_FALSE(
+            d20::validate_ac_der_control_config(config, snapshots.evse_capability.supported_control_functions));
+    }
+
+    GIVEN("an AC DER control config without a ZeroCurrent voltage limit") {
+        const auto snapshots = d20::make_default_ac_der_secc_control_snapshots();
+        auto config = d20::make_default_ac_der_control_config();
+        config.cpd_control.zero_current->over_voltage_limit = std::nullopt;
+        config.cpd_control.zero_current->under_voltage_limit = std::nullopt;
+
+        REQUIRE_FALSE(
+            d20::validate_ac_der_control_config(config, snapshots.evse_capability.supported_control_functions));
     }
 
     GIVEN("AC DER control failure reasons are formatted for application diagnostics") {

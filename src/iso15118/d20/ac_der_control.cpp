@@ -8,6 +8,10 @@ namespace iso15118::d20 {
 
 namespace {
 
+float value_of(const dt::RationalNumber& value) {
+    return dt::from_RationalNumber(value);
+}
+
 dt::RationalNumber zero() {
     return {0, 0};
 }
@@ -159,7 +163,8 @@ bool supports_selected_controls(const dt::DERControlFunctions& selected, const d
 bool snapshots_are_usable(const AcDerSeccControlSnapshots& snapshots) {
     return snapshots.runtime_state.ac_der_enabled and snapshots.runtime_state.grid_policy_fresh and
            snapshots.runtime_state.dso_control_fresh and snapshots.grid_policy.valid and snapshots.dso_control.valid and
-           snapshots.evse_capability.valid;
+           snapshots.evse_capability.valid and validate_ac_der_grid_policy_snapshot(snapshots.grid_policy) and
+           validate_ac_der_dso_control_snapshot(snapshots.dso_control);
 }
 
 AcDerControlFailureReason first_unusable_snapshot_reason(const AcDerSeccControlSnapshots& snapshots) {
@@ -172,10 +177,10 @@ AcDerControlFailureReason first_unusable_snapshot_reason(const AcDerSeccControlS
     if (not snapshots.runtime_state.dso_control_fresh) {
         return AcDerControlFailureReason::StaleDsoControl;
     }
-    if (not snapshots.grid_policy.valid) {
+    if (not snapshots.grid_policy.valid or not validate_ac_der_grid_policy_snapshot(snapshots.grid_policy)) {
         return AcDerControlFailureReason::InvalidGridPolicy;
     }
-    if (not snapshots.dso_control.valid) {
+    if (not snapshots.dso_control.valid or not validate_ac_der_dso_control_snapshot(snapshots.dso_control)) {
         return AcDerControlFailureReason::InvalidDsoControl;
     }
     if (not snapshots.evse_capability.valid) {
@@ -230,6 +235,10 @@ public:
         active_power_support.over_frequency_watt = make_frequency_watt(
             snapshots.grid_policy.over_frequency_watt_start_hz, snapshots.grid_policy.over_frequency_watt_stop_hz);
 
+        if (not validate_ac_der_control_config(config, *context.selected_der_control_functions)) {
+            return {std::nullopt, AcDerControlFailureReason::InvalidGridPolicy};
+        }
+
         return {config, AcDerControlFailureReason::None};
     }
 
@@ -266,6 +275,149 @@ AcDerControlResult IAcDerControlProvider::get_ac_der_control_result(const AcDerC
     }
 
     return {std::nullopt, AcDerControlFailureReason::Unknown};
+}
+
+namespace {
+
+bool is_non_negative(const dt::RationalNumber& value) {
+    return value_of(value) >= 0.0f;
+}
+
+bool is_positive(const dt::RationalNumber& value) {
+    return value_of(value) > 0.0f;
+}
+
+bool is_power_factor(const dt::RationalNumber& value) {
+    const auto cos_phi = value_of(value);
+    return cos_phi >= 0.0f and cos_phi <= 1.0f;
+}
+
+bool optional_is_positive(const std::optional<dt::RationalNumber>& value) {
+    return not value.has_value() or is_positive(*value);
+}
+
+bool optional_is_power_factor(const std::optional<dt::RationalNumber>& value) {
+    return not value.has_value() or is_power_factor(*value);
+}
+
+bool optional_is_non_negative(const std::optional<dt::RationalNumber>& value) {
+    return not value.has_value() or is_non_negative(*value);
+}
+
+bool validate_frequency_watt(const dt::FrequencyWatt& frequency_watt, const bool under_frequency_mode) {
+    const auto f_start = value_of(frequency_watt.f_start);
+    const auto f_stop = value_of(frequency_watt.f_stop);
+
+    return is_positive(frequency_watt.f_start) and is_positive(frequency_watt.f_stop) and
+           ((under_frequency_mode and f_start > f_stop) or (not under_frequency_mode and f_start < f_stop)) and
+           is_non_negative(frequency_watt.slope) and
+           is_non_negative(frequency_watt.step_response_time_constant_active_power);
+}
+
+bool validate_volt_watt(const dt::VoltWatt& volt_watt) {
+    return is_positive(volt_watt.u_start) and is_positive(volt_watt.u_stop) and
+           value_of(volt_watt.u_start) < value_of(volt_watt.u_stop) and
+           is_non_negative(volt_watt.step_response_time_constant_active_power);
+}
+
+bool validate_der_curve(const dt::DERCurve& curve) {
+    if (curve.curve_data_points.size() < 2 or not is_non_negative(curve.step_response_time_constant_reactive_power)) {
+        return false;
+    }
+
+    auto previous_x = value_of(curve.curve_data_points.front().x_value);
+    for (std::size_t index = 1; index < curve.curve_data_points.size(); index++) {
+        const auto current_x = value_of(curve.curve_data_points[index].x_value);
+        if (current_x <= previous_x) {
+            return false;
+        }
+        previous_x = current_x;
+    }
+
+    return true;
+}
+
+bool validate_fault_ride_through(const dt::FaultRideThrough& fault_ride_through) {
+    return is_positive(fault_ride_through.voltage_limit_start_frt) and
+           optional_is_positive(fault_ride_through.voltage_limit_stop_frt) and
+           optional_is_positive(fault_ride_through.voltage_recovery_limit) and
+           is_non_negative(fault_ride_through.step_response_time_constant_active_power) and
+           is_non_negative(fault_ride_through.step_response_time_constant_reactive_power);
+}
+
+bool validate_zero_current(const dt::ZeroCurrent& zero_current) {
+    const auto has_voltage_limit = zero_current.over_voltage_limit.has_value() or zero_current.under_voltage_limit;
+
+    return has_voltage_limit and optional_is_positive(zero_current.over_voltage_limit) and
+           optional_is_positive(zero_current.under_voltage_limit) and
+           optional_is_positive(zero_current.over_voltage_recovery_limit) and
+           optional_is_positive(zero_current.under_voltage_recovery_limit) and
+           is_non_negative(zero_current.step_response_time_constant_active_power) and
+           is_non_negative(zero_current.step_response_time_constant_reactive_power);
+}
+
+bool validate_dso_q_setpoint(const dt::DSOQSetpoint& setpoint) {
+    return is_non_negative(setpoint.step_response_time_constant_reactive_power);
+}
+
+bool validate_dso_cos_phi_setpoint(const dt::DSOCosPhiSetpoint& setpoint) {
+    return is_power_factor(setpoint.value) and optional_is_power_factor(setpoint.value_L2) and
+           optional_is_power_factor(setpoint.value_L3) and
+           is_non_negative(setpoint.step_response_time_constant_reactive_power);
+}
+
+} // namespace
+
+bool validate_ac_der_grid_policy_snapshot(const AcDerGridPolicySnapshot& grid_policy) {
+    return value_of(grid_policy.volt_watt_start_voltage) < value_of(grid_policy.volt_watt_stop_voltage) and
+           is_positive(grid_policy.volt_watt_start_voltage) and is_positive(grid_policy.volt_watt_stop_voltage) and
+           value_of(grid_policy.under_frequency_watt_start_hz) > value_of(grid_policy.under_frequency_watt_stop_hz) and
+           is_positive(grid_policy.under_frequency_watt_start_hz) and
+           is_positive(grid_policy.under_frequency_watt_stop_hz) and
+           value_of(grid_policy.over_frequency_watt_start_hz) < value_of(grid_policy.over_frequency_watt_stop_hz) and
+           is_positive(grid_policy.over_frequency_watt_start_hz) and
+           is_positive(grid_policy.over_frequency_watt_stop_hz) and is_non_negative(grid_policy.maximum_dc_injection);
+}
+
+bool validate_ac_der_dso_control_snapshot(const AcDerDsoControlSnapshot& dso_control) {
+    return validate_dso_q_setpoint(dso_control.q_setpoint) and
+           validate_dso_cos_phi_setpoint(dso_control.cos_phi_setpoint);
+}
+
+bool validate_ac_der_control_config(const AcDerControlConfig& config, const dt::DERControlFunctions& controls) {
+    const auto& der_control = config.cpd_control;
+    const auto has_active_power = der_control.active_power_support.has_value();
+    const auto has_reactive_power = der_control.reactive_power_support.has_value();
+
+    return (not controls.volt_watt or (has_active_power and der_control.active_power_support->volt_watt.has_value() and
+                                       validate_volt_watt(*der_control.active_power_support->volt_watt))) and
+           (not controls.under_frequency_watt or
+            (has_active_power and der_control.active_power_support->under_frequency_watt.has_value() and
+             validate_frequency_watt(*der_control.active_power_support->under_frequency_watt, true))) and
+           (not controls.over_frequency_watt or
+            (has_active_power and der_control.active_power_support->over_frequency_watt.has_value() and
+             validate_frequency_watt(*der_control.active_power_support->over_frequency_watt, false))) and
+           (not controls.volt_var or
+            (has_reactive_power and der_control.reactive_power_support->volt_var.has_value() and
+             validate_der_curve(*der_control.reactive_power_support->volt_var))) and
+           (not controls.watt_var or
+            (has_reactive_power and der_control.reactive_power_support->watt_var.has_value() and
+             validate_der_curve(*der_control.reactive_power_support->watt_var))) and
+           (not controls.watt_cos_phi or
+            (has_reactive_power and der_control.reactive_power_support->watt_cos_phi.has_value() and
+             validate_der_curve(*der_control.reactive_power_support->watt_cos_phi))) and
+           (not controls.over_voltage_fault_ride_through or
+            (der_control.overvoltage_fault_ride_through.has_value() and
+             validate_fault_ride_through(*der_control.overvoltage_fault_ride_through))) and
+           (not controls.under_voltage_fault_ride_through or
+            (der_control.undervoltage_fault_ride_through.has_value() and
+             validate_fault_ride_through(*der_control.undervoltage_fault_ride_through))) and
+           (not controls.zero_current or
+            (der_control.zero_current.has_value() and validate_zero_current(*der_control.zero_current))) and
+           (not controls.dc_injection_restriction or (der_control.maximum_level_dc_injection.has_value() and
+                                                      is_non_negative(*der_control.maximum_level_dc_injection))) and
+           (not controls.dso_q_setpoint_provision or validate_dso_q_setpoint(config.dso_q_setpoint)) and
+           (not controls.dso_cos_phi_setpoint_provision or validate_dso_cos_phi_setpoint(config.dso_cos_phi_setpoint));
 }
 
 AcDerControlConfig make_default_ac_der_control_config() {

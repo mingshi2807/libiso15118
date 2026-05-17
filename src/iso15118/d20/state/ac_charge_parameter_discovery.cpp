@@ -29,30 +29,6 @@ bool has_mandatory_ac_der_controls(const dt::DERControlFunctions& controls) {
     return has_required_ac_der_control_functions(controls);
 }
 
-bool has_configured_ac_der_controls(const dt::DERControlFunctions& controls, const AcDerControlConfig& config) {
-    const auto& der_control = config.cpd_control;
-    const auto has_active_power = der_control.active_power_support.has_value();
-    const auto has_reactive_power = der_control.reactive_power_support.has_value();
-
-    return (not controls.volt_watt or
-            (has_active_power and der_control.active_power_support->volt_watt.has_value())) and
-           (not controls.under_frequency_watt or
-            (has_active_power and der_control.active_power_support->under_frequency_watt.has_value())) and
-           (not controls.over_frequency_watt or
-            (has_active_power and der_control.active_power_support->over_frequency_watt.has_value())) and
-           (not controls.volt_var or
-            (has_reactive_power and der_control.reactive_power_support->volt_var.has_value())) and
-           (not controls.watt_var or
-            (has_reactive_power and der_control.reactive_power_support->watt_var.has_value())) and
-           (not controls.watt_cos_phi or
-            (has_reactive_power and der_control.reactive_power_support->watt_cos_phi.has_value())) and
-           (not controls.over_voltage_fault_ride_through or der_control.overvoltage_fault_ride_through.has_value()) and
-           (not controls.under_voltage_fault_ride_through or
-            der_control.undervoltage_fault_ride_through.has_value()) and
-           (not controls.zero_current or der_control.zero_current.has_value()) and
-           (not controls.dc_injection_restriction or der_control.maximum_level_dc_injection.has_value());
-}
-
 AcChargeParameterDiscoveryResult failed_ac_der_result(message_20::AC_ChargeParameterDiscoveryResponse& res,
                                                       const message_20::datatypes::ResponseCode response_code,
                                                       const AcDerControlFailureReason failure_reason) {
@@ -191,7 +167,7 @@ handle_request_with_diagnostics(const message_20::AC_ChargeParameterDiscoveryReq
             return failed_ac_der_result(res, message_20::datatypes::ResponseCode::FAILED_WrongChargeParameter,
                                         ac_der_control_result.failure_reason);
         }
-        if (not has_configured_ac_der_controls(controls, ac_der_control_result.config.value())) {
+        if (not validate_ac_der_control_config(ac_der_control_result.config.value(), controls)) {
             return failed_ac_der_result(res, message_20::datatypes::ResponseCode::FAILED_WrongChargeParameter,
                                         AcDerControlFailureReason::InvalidDsoControl);
         }
