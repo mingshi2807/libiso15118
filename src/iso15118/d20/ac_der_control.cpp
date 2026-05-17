@@ -103,7 +103,8 @@ bool has_required_ac_der_control_functions(const dt::DERControlFunctions& contro
     return controls.volt_watt and controls.dso_q_setpoint_provision and controls.dso_cos_phi_setpoint_provision and
            controls.dc_injection_restriction and controls.under_frequency_watt and controls.over_frequency_watt and
            controls.volt_var and controls.watt_var and controls.watt_cos_phi and
-           controls.over_voltage_fault_ride_through and controls.zero_current;
+           controls.over_voltage_fault_ride_through and controls.under_voltage_fault_ride_through and
+           controls.zero_current;
 }
 
 const char* ac_der_control_failure_reason_to_string(const AcDerControlFailureReason reason) {

@@ -136,6 +136,18 @@ SCENARIO("AC DER SECC control provider") {
         REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::MissingSupportedMandatoryControlFunctions);
     }
 
+    GIVEN("an EVSE capability snapshot without mandatory under-voltage fault ride-through") {
+        auto snapshots = d20::make_default_ac_der_secc_control_snapshots();
+        snapshots.evse_capability.supported_control_functions.under_voltage_fault_ride_through = false;
+        auto provider = d20::make_secc_ac_der_control_provider(snapshots);
+
+        const auto result = provider->get_ac_der_control_result(make_ac_der_context(
+            d20::make_default_ac_der_secc_control_snapshots().evse_capability.supported_control_functions));
+
+        REQUIRE_FALSE(result.config.has_value());
+        REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::MissingSupportedMandatoryControlFunctions);
+    }
+
     GIVEN("a non-AC_DER service context") {
         auto snapshots = d20::make_default_ac_der_secc_control_snapshots();
         auto provider = d20::make_secc_ac_der_control_provider(snapshots);
@@ -163,6 +175,18 @@ SCENARIO("AC DER SECC control provider") {
         auto snapshots = d20::make_default_ac_der_secc_control_snapshots();
         auto selected_functions = snapshots.evse_capability.supported_control_functions;
         selected_functions.zero_current = false;
+        auto provider = d20::make_secc_ac_der_control_provider(snapshots);
+
+        const auto result = provider->get_ac_der_control_result(make_ac_der_context(selected_functions));
+
+        REQUIRE_FALSE(result.config.has_value());
+        REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::MissingSelectedMandatoryControlFunctions);
+    }
+
+    GIVEN("an AC_DER context without selected under-voltage fault ride-through") {
+        auto snapshots = d20::make_default_ac_der_secc_control_snapshots();
+        auto selected_functions = snapshots.evse_capability.supported_control_functions;
+        selected_functions.under_voltage_fault_ride_through = false;
         auto provider = d20::make_secc_ac_der_control_provider(snapshots);
 
         const auto result = provider->get_ac_der_control_result(make_ac_der_context(selected_functions));
