@@ -40,7 +40,7 @@ Licence Agreement (“Licence Agreement”), clauses 1. ISO’s Copyright, \
 option(ISO15118_INSTALL "Enable install target" ${EVC_MAIN_PROJECT})
 set(ISO15118_LIBCBV2G_GIT_REPOSITORY "https://github.com/mingshi2807/libcbv2g.git"
     CACHE STRING "libcbv2g Git repository used by the FetchContent fallback")
-set(ISO15118_LIBCBV2G_GIT_TAG "03d1b16072fa58bb5ea8ce48dfaef6ad23365da4"
+set(ISO15118_LIBCBV2G_GIT_TAG "a70b7c8a3209429fae4c956dc2fa7c79ada99526"
     CACHE STRING "libcbv2g Git tag or commit used by the FetchContent fallback")
 
 # list of compile options
