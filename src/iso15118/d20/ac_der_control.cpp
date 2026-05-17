@@ -132,6 +132,8 @@ public:
     std::optional<AcDerControlConfig> get_ac_der_control_config(const AcDerControlContext& context) const override {
         if (context.selected_energy_service != dt::ServiceCategory::AC_DER or
             not context.selected_der_control_functions.has_value() or not snapshots_are_usable(snapshots) or
+            not has_required_ac_der_control_functions(*context.selected_der_control_functions) or
+            not has_required_ac_der_control_functions(snapshots.evse_capability.supported_control_functions) or
             not supports_selected_controls(*context.selected_der_control_functions,
                                            snapshots.evse_capability.supported_control_functions)) {
             return std::nullopt;
