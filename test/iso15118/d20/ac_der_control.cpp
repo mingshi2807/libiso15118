@@ -59,6 +59,61 @@ SCENARIO("AC DER SECC control provider") {
         REQUIRE_FALSE(config.has_value());
     }
 
+    GIVEN("a stale DSO control snapshot") {
+        auto snapshots = d20::make_default_ac_der_secc_control_snapshots();
+        snapshots.runtime_state.dso_control_fresh = false;
+        auto provider = d20::make_secc_ac_der_control_provider(snapshots);
+
+        const auto config = provider->get_ac_der_control_config(
+            make_ac_der_context(snapshots.evse_capability.supported_control_functions));
+
+        REQUIRE_FALSE(config.has_value());
+    }
+
+    GIVEN("AC DER is disabled by application runtime state") {
+        auto snapshots = d20::make_default_ac_der_secc_control_snapshots();
+        snapshots.runtime_state.ac_der_enabled = false;
+        auto provider = d20::make_secc_ac_der_control_provider(snapshots);
+
+        const auto config = provider->get_ac_der_control_config(
+            make_ac_der_context(snapshots.evse_capability.supported_control_functions));
+
+        REQUIRE_FALSE(config.has_value());
+    }
+
+    GIVEN("an invalid grid policy snapshot") {
+        auto snapshots = d20::make_default_ac_der_secc_control_snapshots();
+        snapshots.grid_policy.valid = false;
+        auto provider = d20::make_secc_ac_der_control_provider(snapshots);
+
+        const auto config = provider->get_ac_der_control_config(
+            make_ac_der_context(snapshots.evse_capability.supported_control_functions));
+
+        REQUIRE_FALSE(config.has_value());
+    }
+
+    GIVEN("an invalid DSO control snapshot") {
+        auto snapshots = d20::make_default_ac_der_secc_control_snapshots();
+        snapshots.dso_control.valid = false;
+        auto provider = d20::make_secc_ac_der_control_provider(snapshots);
+
+        const auto config = provider->get_ac_der_control_config(
+            make_ac_der_context(snapshots.evse_capability.supported_control_functions));
+
+        REQUIRE_FALSE(config.has_value());
+    }
+
+    GIVEN("an invalid EVSE capability snapshot") {
+        auto snapshots = d20::make_default_ac_der_secc_control_snapshots();
+        snapshots.evse_capability.valid = false;
+        auto provider = d20::make_secc_ac_der_control_provider(snapshots);
+
+        const auto config = provider->get_ac_der_control_config(
+            make_ac_der_context(snapshots.evse_capability.supported_control_functions));
+
+        REQUIRE_FALSE(config.has_value());
+    }
+
     GIVEN("a selected AC_DER control function that is not supported by the EVSE capability snapshot") {
         auto snapshots = d20::make_default_ac_der_secc_control_snapshots();
         auto selected_functions = snapshots.evse_capability.supported_control_functions;

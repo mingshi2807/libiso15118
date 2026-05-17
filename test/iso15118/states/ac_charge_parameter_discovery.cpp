@@ -201,6 +201,70 @@ SCENARIO("AC charge parameter discovery state handling") {
         }
     }
 
+    GIVEN("Bad Case: DER_AC transfer mode while AC_BPT service is selected - FAILED_WrongChargeParameter") {
+        const auto service_parameters = d20::SelectedServiceParameters(
+            dt::ServiceCategory::AC_BPT, dt::AcConnector::ThreePhase, dt::ControlMode::Dynamic,
+            dt::MobilityNeedsMode::ProvidedByEvcc, dt::Pricing::NoPricing, dt::BptChannel::Unified,
+            dt::GeneratorMode::GridFollowing, 230, dt::GridCodeIslandingDetectionMethod::Passive);
+
+        auto session = d20::Session(service_parameters);
+
+        auto limits = d20::AcTransferLimits{};
+        limits.charge_power.max = dt::from_float(11000.0f);
+        limits.charge_power.min = dt::from_float(1000.0f);
+        limits.nominal_frequency = dt::from_float(50.0f);
+        limits.discharge_power = d20::Limit<dt::RationalNumber>{dt::from_float(6000.0f), dt::from_float(1000.0f)};
+
+        message_20::AC_ChargeParameterDiscoveryRequest req;
+        req.header.session_id = session.get_id();
+        req.header.timestamp = 1691411798;
+        req.transfer_mode.emplace<DER_AC_ModeReq>();
+
+        RecordingAcDerControlProvider der_provider(d20::make_default_ac_der_control_config());
+        const auto res =
+            d20::state::handle_request(req, session, limits, iso15118::d20::AcPresentPower{}, der_provider);
+
+        THEN("ResponseCode: FAILED_WrongChargeParameter and AC DER provider is not queried") {
+            REQUIRE(res.response_code == dt::ResponseCode::FAILED_WrongChargeParameter);
+            REQUIRE(der_provider.calls == 0);
+        }
+    }
+
+    GIVEN("Bad Case: BPT_AC transfer mode while AC_DER service is selected - FAILED_WrongChargeParameter") {
+        const auto service_parameters = d20::SelectedServiceParameters(
+            dt::ServiceCategory::AC_DER, dt::AcConnector::ThreePhase, dt::ControlMode::Dynamic,
+            dt::MobilityNeedsMode::ProvidedByEvcc, dt::Pricing::NoPricing, dt::BptChannel::Unified,
+            dt::GeneratorMode::GridFollowing, 230, dt::GridCodeIslandingDetectionMethod::Passive,
+            get_mandatory_der_control_functions());
+
+        auto session = d20::Session(service_parameters);
+
+        auto limits = d20::AcTransferLimits{};
+        limits.charge_power.max = dt::from_float(11000.0f);
+        limits.charge_power.min = dt::from_float(1000.0f);
+        limits.nominal_frequency = dt::from_float(50.0f);
+        limits.discharge_power = d20::Limit<dt::RationalNumber>{dt::from_float(6000.0f), dt::from_float(1000.0f)};
+
+        message_20::AC_ChargeParameterDiscoveryRequest req;
+        req.header.session_id = session.get_id();
+        req.header.timestamp = 1691411798;
+
+        auto& req_out = req.transfer_mode.emplace<BPT_AC_ModeReq>();
+        req_out.max_charge_power = {11, 3};
+        req_out.min_charge_power = {1, 3};
+        req_out.max_discharge_power = {6, 3};
+        req_out.min_discharge_power = {1, 3};
+
+        RecordingAcDerControlProvider der_provider(d20::make_default_ac_der_control_config());
+        const auto res =
+            d20::state::handle_request(req, session, limits, iso15118::d20::AcPresentPower{}, der_provider);
+
+        THEN("ResponseCode: FAILED_WrongChargeParameter and AC DER provider is not queried") {
+            REQUIRE(res.response_code == dt::ResponseCode::FAILED_WrongChargeParameter);
+            REQUIRE(der_provider.calls == 0);
+        }
+    }
+
     GIVEN("Good Case: AC") {
 
         const auto service_parameters = d20::SelectedServiceParameters(

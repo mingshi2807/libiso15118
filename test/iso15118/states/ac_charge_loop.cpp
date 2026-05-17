@@ -349,6 +349,60 @@ SCENARIO("AC charge loop state handling") {
         }
     }
 
+    GIVEN("Bad case - DER dynamic control mode while AC_BPT service is selected") {
+        d20::SelectedServiceParameters service_parameters = d20::SelectedServiceParameters(
+            dt::ServiceCategory::AC_BPT, dt::AcConnector::ThreePhase, dt::ControlMode::Dynamic,
+            dt::MobilityNeedsMode::ProvidedByEvcc, dt::Pricing::NoPricing, dt::BptChannel::Unified,
+            dt::GeneratorMode::GridFollowing, 230, dt::GridCodeIslandingDetectionMethod::Passive);
+
+        d20::Session session = d20::Session(service_parameters);
+        message_20::AC_ChargeLoopRequest req;
+        req.header.session_id = session.get_id();
+        req.header.timestamp = 1691411798;
+        req.control_mode.emplace<Dynamic_DER_AC_Req>();
+        req.meter_info_requested = false;
+
+        RecordingAcDerControlProvider der_provider(d20::make_default_ac_der_control_config());
+        const auto res =
+            d20::state::handle_request(req, session, false, false, 50, ac_limits, d20::AcTargetPower{},
+                                       d20::AcPresentPower{}, d20::UpdateDynamicModeParameters(), der_provider);
+
+        THEN("ResponseCode: FAILED and AC DER provider is not queried") {
+            REQUIRE(res.response_code == dt::ResponseCode::FAILED);
+            REQUIRE(der_provider.calls == 0);
+        }
+    }
+
+    GIVEN("Bad case - BPT dynamic control mode while AC_DER service is selected") {
+        d20::SelectedServiceParameters service_parameters = d20::SelectedServiceParameters(
+            dt::ServiceCategory::AC_DER, dt::AcConnector::ThreePhase, dt::ControlMode::Dynamic,
+            dt::MobilityNeedsMode::ProvidedByEvcc, dt::Pricing::NoPricing, dt::BptChannel::Unified,
+            dt::GeneratorMode::GridFollowing, 230, dt::GridCodeIslandingDetectionMethod::Passive,
+            get_mandatory_der_control_functions());
+
+        d20::Session session = d20::Session(service_parameters);
+        message_20::AC_ChargeLoopRequest req;
+        req.header.session_id = session.get_id();
+        req.header.timestamp = 1691411798;
+
+        auto& req_control_mode = req.control_mode.emplace<Dynamic_BPT_AC_Req>();
+        req_control_mode.present_active_power = {11, 3};
+        req_control_mode.max_charge_power = {11, 3};
+        req_control_mode.min_charge_power = {4, 0};
+        req_control_mode.present_reactive_power = {10, 0};
+        req.meter_info_requested = false;
+
+        RecordingAcDerControlProvider der_provider(d20::make_default_ac_der_control_config());
+        const auto res =
+            d20::state::handle_request(req, session, false, false, 50, ac_limits, d20::AcTargetPower{},
+                                       d20::AcPresentPower{}, d20::UpdateDynamicModeParameters(), der_provider);
+
+        THEN("ResponseCode: FAILED and AC DER provider is not queried") {
+            REQUIRE(res.response_code == dt::ResponseCode::FAILED);
+            REQUIRE(der_provider.calls == 0);
+        }
+    }
+
     GIVEN("Good case - AC_DER dynamic mode") {
         const auto der_control_functions = get_mandatory_der_control_functions();
 
