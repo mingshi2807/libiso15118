@@ -53,6 +53,12 @@ bool has_configured_ac_der_controls(const dt::DERControlFunctions& controls, con
            (not controls.dc_injection_restriction or der_control.maximum_level_dc_injection.has_value());
 }
 
+AcChargeParameterDiscoveryResult failed_ac_der_result(message_20::AC_ChargeParameterDiscoveryResponse& res,
+                                                      const message_20::datatypes::ResponseCode response_code,
+                                                      const AcDerControlFailureReason failure_reason) {
+    return {response_with_code(res, response_code), failure_reason};
+}
+
 } // namespace
 
 template <>
@@ -130,15 +136,16 @@ void convert(DER_AC_ModeRes& out, const d20::AcTransferLimits& limits, const d20
     out.grid_connection_mode = dt::GridConnectionMode::GridConnected;
 }
 
-message_20::AC_ChargeParameterDiscoveryResponse
-handle_request(const message_20::AC_ChargeParameterDiscoveryRequest& req, const d20::Session& session,
-               const d20::AcTransferLimits& limits, const d20::AcPresentPower& powers,
-               const d20::IAcDerControlProvider& ac_der_control_provider) {
+AcChargeParameterDiscoveryResult
+handle_request_with_diagnostics(const message_20::AC_ChargeParameterDiscoveryRequest& req, const d20::Session& session,
+                                const d20::AcTransferLimits& limits, const d20::AcPresentPower& powers,
+                                const d20::IAcDerControlProvider& ac_der_control_provider) {
 
     message_20::AC_ChargeParameterDiscoveryResponse res;
 
     if (validate_and_setup_header(res.header, session, req.header.session_id) == false) {
-        return response_with_code(res, message_20::datatypes::ResponseCode::FAILED_UnknownSession);
+        return {response_with_code(res, message_20::datatypes::ResponseCode::FAILED_UnknownSession),
+                AcDerControlFailureReason::None};
     }
 
     const auto selected_services = session.get_selected_services();
@@ -149,7 +156,8 @@ handle_request(const message_20::AC_ChargeParameterDiscoveryRequest& req, const 
 
     if (std::holds_alternative<AC_ModeReq>(req.transfer_mode)) {
         if (selected_energy_service != message_20::datatypes::ServiceCategory::AC) {
-            return response_with_code(res, message_20::datatypes::ResponseCode::FAILED_WrongChargeParameter);
+            return {response_with_code(res, message_20::datatypes::ResponseCode::FAILED_WrongChargeParameter),
+                    AcDerControlFailureReason::None};
         }
 
         auto& mode = res.transfer_mode.emplace<AC_ModeRes>();
@@ -157,7 +165,8 @@ handle_request(const message_20::AC_ChargeParameterDiscoveryRequest& req, const 
 
     } else if (std::holds_alternative<BPT_AC_ModeReq>(req.transfer_mode)) {
         if (selected_energy_service != message_20::datatypes::ServiceCategory::AC_BPT) {
-            return response_with_code(res, message_20::datatypes::ResponseCode::FAILED_WrongChargeParameter);
+            return {response_with_code(res, message_20::datatypes::ResponseCode::FAILED_WrongChargeParameter),
+                    AcDerControlFailureReason::None};
         }
 
         auto& mode = res.transfer_mode.emplace<BPT_AC_ModeRes>();
@@ -165,27 +174,45 @@ handle_request(const message_20::AC_ChargeParameterDiscoveryRequest& req, const 
 
     } else if (std::holds_alternative<DER_AC_ModeReq>(req.transfer_mode)) {
         if (selected_energy_service != message_20::datatypes::ServiceCategory::AC_DER) {
-            return response_with_code(res, message_20::datatypes::ResponseCode::FAILED_WrongChargeParameter);
+            return failed_ac_der_result(res, message_20::datatypes::ResponseCode::FAILED_WrongChargeParameter,
+                                        AcDerControlFailureReason::NonAcDerServiceSelected);
         }
         if (not selected_services.selected_der_control_functions.has_value()) {
-            return response_with_code(res, message_20::datatypes::ResponseCode::FAILED_WrongChargeParameter);
+            return failed_ac_der_result(res, message_20::datatypes::ResponseCode::FAILED_WrongChargeParameter,
+                                        AcDerControlFailureReason::MissingSelectedControlFunctions);
         }
         const auto& controls = selected_services.selected_der_control_functions.value();
-        const auto ac_der_control_config = ac_der_control_provider.get_ac_der_control_config(provider_context);
-        if (not ac_der_control_config.has_value() or not has_mandatory_ac_der_controls(controls) or
-            not has_configured_ac_der_controls(controls, ac_der_control_config.value())) {
-            return response_with_code(res, message_20::datatypes::ResponseCode::FAILED_WrongChargeParameter);
+        if (not has_mandatory_ac_der_controls(controls)) {
+            return failed_ac_der_result(res, message_20::datatypes::ResponseCode::FAILED_WrongChargeParameter,
+                                        AcDerControlFailureReason::MissingSelectedMandatoryControlFunctions);
+        }
+        const auto ac_der_control_result = ac_der_control_provider.get_ac_der_control_result(provider_context);
+        if (not ac_der_control_result.config.has_value()) {
+            return failed_ac_der_result(res, message_20::datatypes::ResponseCode::FAILED_WrongChargeParameter,
+                                        ac_der_control_result.failure_reason);
+        }
+        if (not has_configured_ac_der_controls(controls, ac_der_control_result.config.value())) {
+            return failed_ac_der_result(res, message_20::datatypes::ResponseCode::FAILED_WrongChargeParameter,
+                                        AcDerControlFailureReason::InvalidDsoControl);
         }
 
         auto& mode = res.transfer_mode.emplace<DER_AC_ModeRes>();
         convert(mode, limits, powers);
-        mode.der_control = ac_der_control_config->cpd_control;
+        mode.der_control = ac_der_control_result.config->cpd_control;
 
     } else {
-        return response_with_code(res, message_20::datatypes::ResponseCode::FAILED_WrongChargeParameter);
+        return {response_with_code(res, message_20::datatypes::ResponseCode::FAILED_WrongChargeParameter),
+                AcDerControlFailureReason::None};
     }
 
-    return response_with_code(res, message_20::datatypes::ResponseCode::OK);
+    return {response_with_code(res, message_20::datatypes::ResponseCode::OK), AcDerControlFailureReason::None};
+}
+
+message_20::AC_ChargeParameterDiscoveryResponse
+handle_request(const message_20::AC_ChargeParameterDiscoveryRequest& req, const d20::Session& session,
+               const d20::AcTransferLimits& limits, const d20::AcPresentPower& powers,
+               const d20::IAcDerControlProvider& ac_der_control_provider) {
+    return handle_request_with_diagnostics(req, session, limits, powers, ac_der_control_provider).response;
 }
 
 message_20::AC_ChargeParameterDiscoveryResponse
@@ -235,12 +262,20 @@ Result AC_ChargeParameterDiscovery::feed(Event ev) {
             m_ctx.session_ev_info.ev_transfer_limits.emplace<DER_AC_ModeReq>(*mode);
         }
 
-        const auto res = handle_request(*req, m_ctx.session, m_ctx.session_config.ac_limits, present_powers,
-                                        *m_ctx.session_config.ac_der_control_provider);
+        const auto result =
+            handle_request_with_diagnostics(*req, m_ctx.session, m_ctx.session_config.ac_limits, present_powers,
+                                            *m_ctx.session_config.ac_der_control_provider);
+        const auto& res = result.response;
 
         m_ctx.respond(res);
 
         if (res.response_code >= message_20::datatypes::ResponseCode::FAILED) {
+            if (result.ac_der_failure_reason != AcDerControlFailureReason::None) {
+                m_ctx.feedback.ac_der_control_diagnostic({message_20::Type::AC_ChargeParameterDiscoveryReq,
+                                                          res.response_code, result.ac_der_failure_reason});
+                m_ctx.log("AC DER control provider rejected CPD request: %s",
+                          ac_der_control_failure_reason_to_string(result.ac_der_failure_reason));
+            }
             m_ctx.session_stopped = true;
             return {};
         }

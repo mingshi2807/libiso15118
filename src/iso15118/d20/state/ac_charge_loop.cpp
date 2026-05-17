@@ -153,18 +153,25 @@ void set_dynamic_parameters_in_res(T& res_mode, const UpdateDynamicModeParameter
     res_mode.minimum_soc = parameters.min_soc;
     res_mode.ack_max_delay = 30; // TODO(sl) what to send here and define 30 seconds as const
 }
+
+AcChargeLoopResult failed_ac_der_result(message_20::AC_ChargeLoopResponse& res, const dt::ResponseCode response_code,
+                                        const AcDerControlFailureReason failure_reason) {
+    return {response_with_code(res, response_code), failure_reason};
+}
 } // namespace
 
-message_20::AC_ChargeLoopResponse
-handle_request(const message_20::AC_ChargeLoopRequest& req, const d20::Session& session, bool stop, bool pause,
-               float target_frequency, const d20::AcTransferLimits& ac_limits, const AcTargetPower& target_powers,
-               const AcPresentPower& present_powers, const UpdateDynamicModeParameters& dynamic_parameters,
-               const IAcDerControlProvider& ac_der_control_provider) {
+AcChargeLoopResult handle_request_with_diagnostics(const message_20::AC_ChargeLoopRequest& req,
+                                                   const d20::Session& session, bool stop, bool pause,
+                                                   float target_frequency, const d20::AcTransferLimits& ac_limits,
+                                                   const AcTargetPower& target_powers,
+                                                   const AcPresentPower& present_powers,
+                                                   const UpdateDynamicModeParameters& dynamic_parameters,
+                                                   const IAcDerControlProvider& ac_der_control_provider) {
 
     message_20::AC_ChargeLoopResponse res;
 
     if (validate_and_setup_header(res.header, session, req.header.session_id) == false) {
-        return response_with_code(res, dt::ResponseCode::FAILED_UnknownSession);
+        return {response_with_code(res, dt::ResponseCode::FAILED_UnknownSession), AcDerControlFailureReason::None};
     }
 
     const auto& selected_services = session.get_selected_services();
@@ -181,7 +188,7 @@ handle_request(const message_20::AC_ChargeLoopRequest& req, const d20::Session& 
         // If the ev sends a false control mode or a false energy service other than the previous selected ones, then
         // the charger should terminate the session
         if (selected_control_mode != dt::ControlMode::Scheduled or selected_energy_service != dt::ServiceCategory::AC) {
-            return response_with_code(res, dt::ResponseCode::FAILED);
+            return {response_with_code(res, dt::ResponseCode::FAILED), AcDerControlFailureReason::None};
         }
 
         auto& res_mode = res.control_mode.emplace<Scheduled_AC_Res>();
@@ -193,7 +200,7 @@ handle_request(const message_20::AC_ChargeLoopRequest& req, const d20::Session& 
         // the charger should terminate the session
         if (selected_control_mode != dt::ControlMode::Scheduled or
             selected_energy_service != dt::ServiceCategory::AC_BPT) {
-            return response_with_code(res, dt::ResponseCode::FAILED);
+            return {response_with_code(res, dt::ResponseCode::FAILED), AcDerControlFailureReason::None};
         }
 
         auto& res_mode = res.control_mode.emplace<Scheduled_BPT_AC_Res>();
@@ -203,29 +210,37 @@ handle_request(const message_20::AC_ChargeLoopRequest& req, const d20::Session& 
 
         if (selected_control_mode != dt::ControlMode::Scheduled or
             selected_energy_service != dt::ServiceCategory::AC_DER) {
-            return response_with_code(res, dt::ResponseCode::FAILED);
+            return failed_ac_der_result(res, dt::ResponseCode::FAILED,
+                                        AcDerControlFailureReason::NonAcDerServiceSelected);
         }
         if (not selected_der_controls.has_value()) {
-            return response_with_code(res, dt::ResponseCode::FAILED);
+            return failed_ac_der_result(res, dt::ResponseCode::FAILED,
+                                        AcDerControlFailureReason::MissingSelectedControlFunctions);
         }
         const auto& controls = selected_der_controls.value();
-        const auto ac_der_control_config = ac_der_control_provider.get_ac_der_control_config(provider_context);
-        if (not ac_der_control_config.has_value() or not has_mandatory_ac_der_controls(controls) or
-            not has_configured_ac_der_setpoints(controls, ac_der_control_config.value())) {
-            return response_with_code(res, dt::ResponseCode::FAILED);
+        if (not has_mandatory_ac_der_controls(controls)) {
+            return failed_ac_der_result(res, dt::ResponseCode::FAILED,
+                                        AcDerControlFailureReason::MissingSelectedMandatoryControlFunctions);
+        }
+        const auto ac_der_control_result = ac_der_control_provider.get_ac_der_control_result(provider_context);
+        if (not ac_der_control_result.config.has_value()) {
+            return failed_ac_der_result(res, dt::ResponseCode::FAILED, ac_der_control_result.failure_reason);
+        }
+        if (not has_configured_ac_der_setpoints(controls, ac_der_control_result.config.value())) {
+            return failed_ac_der_result(res, dt::ResponseCode::FAILED, AcDerControlFailureReason::InvalidDsoControl);
         }
 
         auto& res_mode = res.control_mode.emplace<Scheduled_DER_AC_Res>();
         convert(static_cast<Scheduled_AC_Res&>(res_mode), target_powers, present_powers);
         fill_der_power_limits(res_mode, ac_limits);
-        fill_der_control_setpoints(res_mode, ac_der_control_config.value(), controls);
+        fill_der_control_setpoints(res_mode, ac_der_control_result.config.value(), controls);
 
     } else if (std::holds_alternative<Dynamic_AC_Req>(req.control_mode)) {
 
         // If the ev sends a false control mode or a false energy service other than the previous selected ones, then
         // the charger should terminate the session
         if (selected_control_mode != dt::ControlMode::Dynamic or selected_energy_service != dt::ServiceCategory::AC) {
-            return response_with_code(res, dt::ResponseCode::FAILED);
+            return {response_with_code(res, dt::ResponseCode::FAILED), AcDerControlFailureReason::None};
         }
 
         auto& res_mode = res.control_mode.emplace<Dynamic_AC_Res>();
@@ -241,7 +256,7 @@ handle_request(const message_20::AC_ChargeLoopRequest& req, const d20::Session& 
         // the charger should terminate the session
         if (selected_control_mode != dt::ControlMode::Dynamic or
             selected_energy_service != dt::ServiceCategory::AC_BPT) {
-            return response_with_code(res, dt::ResponseCode::FAILED);
+            return {response_with_code(res, dt::ResponseCode::FAILED), AcDerControlFailureReason::None};
         }
 
         auto& res_mode = res.control_mode.emplace<Dynamic_BPT_AC_Res>();
@@ -254,22 +269,30 @@ handle_request(const message_20::AC_ChargeLoopRequest& req, const d20::Session& 
 
         if (selected_control_mode != dt::ControlMode::Dynamic or
             selected_energy_service != dt::ServiceCategory::AC_DER) {
-            return response_with_code(res, dt::ResponseCode::FAILED);
+            return failed_ac_der_result(res, dt::ResponseCode::FAILED,
+                                        AcDerControlFailureReason::NonAcDerServiceSelected);
         }
         if (not selected_der_controls.has_value()) {
-            return response_with_code(res, dt::ResponseCode::FAILED);
+            return failed_ac_der_result(res, dt::ResponseCode::FAILED,
+                                        AcDerControlFailureReason::MissingSelectedControlFunctions);
         }
         const auto& controls = selected_der_controls.value();
-        const auto ac_der_control_config = ac_der_control_provider.get_ac_der_control_config(provider_context);
-        if (not ac_der_control_config.has_value() or not has_mandatory_ac_der_controls(controls) or
-            not has_configured_ac_der_setpoints(controls, ac_der_control_config.value())) {
-            return response_with_code(res, dt::ResponseCode::FAILED);
+        if (not has_mandatory_ac_der_controls(controls)) {
+            return failed_ac_der_result(res, dt::ResponseCode::FAILED,
+                                        AcDerControlFailureReason::MissingSelectedMandatoryControlFunctions);
+        }
+        const auto ac_der_control_result = ac_der_control_provider.get_ac_der_control_result(provider_context);
+        if (not ac_der_control_result.config.has_value()) {
+            return failed_ac_der_result(res, dt::ResponseCode::FAILED, ac_der_control_result.failure_reason);
+        }
+        if (not has_configured_ac_der_setpoints(controls, ac_der_control_result.config.value())) {
+            return failed_ac_der_result(res, dt::ResponseCode::FAILED, AcDerControlFailureReason::InvalidDsoControl);
         }
 
         auto& res_mode = res.control_mode.emplace<Dynamic_DER_AC_Res>();
         convert(static_cast<Dynamic_AC_Res&>(res_mode), target_powers, present_powers);
         fill_der_power_limits(res_mode, ac_limits);
-        fill_der_control_setpoints(res_mode, ac_der_control_config.value(), controls);
+        fill_der_control_setpoints(res_mode, ac_der_control_result.config.value(), controls);
 
         if (selected_mobility_needs_mode == dt::MobilityNeedsMode::ProvidedBySecc) {
             set_dynamic_parameters_in_res(res_mode, dynamic_parameters, res.header.timestamp);
@@ -288,7 +311,17 @@ handle_request(const message_20::AC_ChargeLoopRequest& req, const d20::Session& 
         res.status = {notification_max_delay, dt::EvseNotification::Pause};
     }
 
-    return response_with_code(res, dt::ResponseCode::OK);
+    return {response_with_code(res, dt::ResponseCode::OK), AcDerControlFailureReason::None};
+}
+
+message_20::AC_ChargeLoopResponse
+handle_request(const message_20::AC_ChargeLoopRequest& req, const d20::Session& session, bool stop, bool pause,
+               float target_frequency, const d20::AcTransferLimits& ac_limits, const AcTargetPower& target_powers,
+               const AcPresentPower& present_powers, const UpdateDynamicModeParameters& dynamic_parameters,
+               const IAcDerControlProvider& ac_der_control_provider) {
+    return handle_request_with_diagnostics(req, session, stop, pause, target_frequency, ac_limits, target_powers,
+                                           present_powers, dynamic_parameters, ac_der_control_provider)
+        .response;
 }
 
 message_20::AC_ChargeLoopResponse
@@ -378,13 +411,20 @@ Result AC_ChargeLoop::feed(Event ev) {
             first_entry_in_charge_loop = false;
         }
 
-        const auto res = handle_request(*req, m_ctx.session, stop, pause, target_frequency,
-                                        m_ctx.session_config.ac_limits, target_powers, present_powers,
-                                        dynamic_parameters, *m_ctx.session_config.ac_der_control_provider);
+        const auto result = handle_request_with_diagnostics(
+            *req, m_ctx.session, stop, pause, target_frequency, m_ctx.session_config.ac_limits, target_powers,
+            present_powers, dynamic_parameters, *m_ctx.session_config.ac_der_control_provider);
+        const auto& res = result.response;
 
         m_ctx.respond(res);
 
         if (res.response_code >= dt::ResponseCode::FAILED) {
+            if (result.ac_der_failure_reason != AcDerControlFailureReason::None) {
+                m_ctx.feedback.ac_der_control_diagnostic(
+                    {message_20::Type::AC_ChargeLoopReq, res.response_code, result.ac_der_failure_reason});
+                m_ctx.log("AC DER control provider rejected ChargeLoop request: %s",
+                          ac_der_control_failure_reason_to_string(result.ac_der_failure_reason));
+            }
             m_ctx.session_stopped = true;
             return {};
         }

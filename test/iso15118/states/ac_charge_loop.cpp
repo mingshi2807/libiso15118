@@ -42,6 +42,7 @@ dt::DERControlFunctions get_mandatory_der_control_functions() {
     der_control_functions.watt_var = true;
     der_control_functions.watt_cos_phi = true;
     der_control_functions.over_voltage_fault_ride_through = true;
+    der_control_functions.under_voltage_fault_ride_through = true;
     der_control_functions.zero_current = true;
     return der_control_functions;
 }
@@ -70,6 +71,25 @@ public:
         (void)context;
         return std::nullopt;
     }
+};
+
+class RejectingAcDerControlProvider : public d20::IAcDerControlProvider {
+public:
+    explicit RejectingAcDerControlProvider(d20::AcDerControlFailureReason reason_) : reason(reason_) {
+    }
+
+    std::optional<d20::AcDerControlConfig>
+    get_ac_der_control_config(const d20::AcDerControlContext& context) const override {
+        (void)context;
+        return std::nullopt;
+    }
+
+    d20::AcDerControlResult get_ac_der_control_result(const d20::AcDerControlContext& context) const override {
+        (void)context;
+        return {std::nullopt, reason};
+    }
+
+    d20::AcDerControlFailureReason reason;
 };
 
 bool same_rational(const iso20_ac_RationalNumberType& actual, const dt::RationalNumber& expected) {
@@ -496,6 +516,31 @@ SCENARIO("AC charge loop state handling") {
         }
     }
 
+    GIVEN("Bad case - AC_DER dynamic mode but provider rejects ChargeLoop with stale grid policy") {
+        d20::SelectedServiceParameters service_parameters = d20::SelectedServiceParameters(
+            dt::ServiceCategory::AC_DER, dt::AcConnector::ThreePhase, dt::ControlMode::Dynamic,
+            dt::MobilityNeedsMode::ProvidedByEvcc, dt::Pricing::NoPricing, dt::BptChannel::Unified,
+            dt::GeneratorMode::GridFollowing, 230, dt::GridCodeIslandingDetectionMethod::Passive,
+            get_mandatory_der_control_functions());
+
+        d20::Session session = d20::Session(service_parameters);
+        message_20::AC_ChargeLoopRequest req;
+        req.header.session_id = session.get_id();
+        req.header.timestamp = 1691411798;
+        req.control_mode.emplace<Dynamic_DER_AC_Req>();
+        req.meter_info_requested = false;
+
+        const RejectingAcDerControlProvider provider(d20::AcDerControlFailureReason::StaleGridPolicy);
+        const auto result = d20::state::handle_request_with_diagnostics(req, session, false, false, 50, ac_limits,
+                                                                        d20::AcTargetPower{}, d20::AcPresentPower{},
+                                                                        d20::UpdateDynamicModeParameters(), provider);
+
+        THEN("ResponseCode: FAILED and provider reason is preserved") {
+            REQUIRE(result.response.response_code == dt::ResponseCode::FAILED);
+            REQUIRE(result.ac_der_failure_reason == d20::AcDerControlFailureReason::StaleGridPolicy);
+        }
+    }
+
     GIVEN("Bad case - AC_DER dynamic mode with incomplete mandatory controls") {
         dt::DERControlFunctions der_control_functions;
         der_control_functions.volt_watt = true;
@@ -518,6 +563,35 @@ SCENARIO("AC charge loop state handling") {
 
         THEN("ResponseCode: FAILED") {
             REQUIRE(res.response_code == dt::ResponseCode::FAILED);
+        }
+    }
+
+    GIVEN("Bad case - AC_DER dynamic mode without selected under-voltage fault ride-through") {
+        auto der_control_functions = get_mandatory_der_control_functions();
+        der_control_functions.under_voltage_fault_ride_through = false;
+
+        d20::SelectedServiceParameters service_parameters = d20::SelectedServiceParameters(
+            dt::ServiceCategory::AC_DER, dt::AcConnector::ThreePhase, dt::ControlMode::Dynamic,
+            dt::MobilityNeedsMode::ProvidedByEvcc, dt::Pricing::NoPricing, dt::BptChannel::Unified,
+            dt::GeneratorMode::GridFollowing, 230, dt::GridCodeIslandingDetectionMethod::Passive,
+            der_control_functions);
+
+        d20::Session session = d20::Session(service_parameters);
+        message_20::AC_ChargeLoopRequest req;
+        req.header.session_id = session.get_id();
+        req.header.timestamp = 1691411798;
+        req.control_mode.emplace<Dynamic_DER_AC_Req>();
+        req.meter_info_requested = false;
+
+        const auto result = d20::state::handle_request_with_diagnostics(
+            req, session, false, false, 50, ac_limits, d20::AcTargetPower{}, d20::AcPresentPower{},
+            d20::UpdateDynamicModeParameters(),
+            *d20::make_static_ac_der_control_provider(d20::make_default_ac_der_control_config()));
+
+        THEN("ResponseCode: FAILED and selected bitmap reason is preserved") {
+            REQUIRE(result.response.response_code == dt::ResponseCode::FAILED);
+            REQUIRE(result.ac_der_failure_reason ==
+                    d20::AcDerControlFailureReason::MissingSelectedMandatoryControlFunctions);
         }
     }
 

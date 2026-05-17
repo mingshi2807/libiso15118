@@ -35,6 +35,7 @@ dt::DERControlFunctions get_mandatory_der_control_functions() {
     der_control_functions.watt_var = true;
     der_control_functions.watt_cos_phi = true;
     der_control_functions.over_voltage_fault_ride_through = true;
+    der_control_functions.under_voltage_fault_ride_through = true;
     der_control_functions.zero_current = true;
     return der_control_functions;
 }
@@ -63,6 +64,25 @@ public:
         (void)context;
         return std::nullopt;
     }
+};
+
+class RejectingAcDerControlProvider : public d20::IAcDerControlProvider {
+public:
+    explicit RejectingAcDerControlProvider(d20::AcDerControlFailureReason reason_) : reason(reason_) {
+    }
+
+    std::optional<d20::AcDerControlConfig>
+    get_ac_der_control_config(const d20::AcDerControlContext& context) const override {
+        (void)context;
+        return std::nullopt;
+    }
+
+    d20::AcDerControlResult get_ac_der_control_result(const d20::AcDerControlContext& context) const override {
+        (void)context;
+        return {std::nullopt, reason};
+    }
+
+    d20::AcDerControlFailureReason reason;
 };
 } // namespace
 
@@ -427,6 +447,64 @@ SCENARIO("AC charge parameter discovery state handling") {
         THEN("ResponseCode: FAILED_WrongChargeParameter and provider was queried") {
             REQUIRE(res.response_code == dt::ResponseCode::FAILED_WrongChargeParameter);
             REQUIRE(provider.calls == 1);
+        }
+    }
+
+    GIVEN("Bad Case: AC_DER selected but provider rejects CPD with stale DSO control") {
+        const auto service_parameters = d20::SelectedServiceParameters(
+            dt::ServiceCategory::AC_DER, dt::AcConnector::ThreePhase, dt::ControlMode::Dynamic,
+            dt::MobilityNeedsMode::ProvidedByEvcc, dt::Pricing::NoPricing, dt::BptChannel::Unified,
+            dt::GeneratorMode::GridFollowing, 230, dt::GridCodeIslandingDetectionMethod::Passive,
+            get_mandatory_der_control_functions());
+
+        auto session = d20::Session(service_parameters);
+
+        auto limits = d20::AcTransferLimits{};
+        limits.charge_power.max = dt::from_float(11000.0f);
+        limits.charge_power.min = dt::from_float(1000.0f);
+        limits.nominal_frequency = dt::from_float(50.0f);
+
+        const RejectingAcDerControlProvider provider(d20::AcDerControlFailureReason::StaleDsoControl);
+
+        message_20::AC_ChargeParameterDiscoveryRequest req;
+        req.header.session_id = session.get_id();
+        req.header.timestamp = 1691411798;
+        req.transfer_mode.emplace<DER_AC_ModeReq>();
+
+        const auto result = d20::state::handle_request_with_diagnostics(req, session, limits,
+                                                                        iso15118::d20::AcPresentPower{}, provider);
+
+        THEN("ResponseCode: FAILED_WrongChargeParameter and provider reason is preserved") {
+            REQUIRE(result.response.response_code == dt::ResponseCode::FAILED_WrongChargeParameter);
+            REQUIRE(result.ac_der_failure_reason == d20::AcDerControlFailureReason::StaleDsoControl);
+        }
+    }
+
+    GIVEN("Bad Case: AC_DER selected with incomplete selected mandatory controls") {
+        auto der_control_functions = get_mandatory_der_control_functions();
+        der_control_functions.under_voltage_fault_ride_through = false;
+        const auto service_parameters = d20::SelectedServiceParameters(
+            dt::ServiceCategory::AC_DER, dt::AcConnector::ThreePhase, dt::ControlMode::Dynamic,
+            dt::MobilityNeedsMode::ProvidedByEvcc, dt::Pricing::NoPricing, dt::BptChannel::Unified,
+            dt::GeneratorMode::GridFollowing, 230, dt::GridCodeIslandingDetectionMethod::Passive,
+            der_control_functions);
+
+        auto session = d20::Session(service_parameters);
+
+        message_20::AC_ChargeParameterDiscoveryRequest req;
+        req.header.session_id = session.get_id();
+        req.header.timestamp = 1691411798;
+        req.transfer_mode.emplace<DER_AC_ModeReq>();
+
+        auto limits = d20::AcTransferLimits{};
+        const auto result = d20::state::handle_request_with_diagnostics(
+            req, session, limits, iso15118::d20::AcPresentPower{},
+            *d20::make_static_ac_der_control_provider(d20::make_default_ac_der_control_config()));
+
+        THEN("ResponseCode: FAILED_WrongChargeParameter and selected bitmap reason is preserved") {
+            REQUIRE(result.response.response_code == dt::ResponseCode::FAILED_WrongChargeParameter);
+            REQUIRE(result.ac_der_failure_reason ==
+                    d20::AcDerControlFailureReason::MissingSelectedMandatoryControlFunctions);
         }
     }
 

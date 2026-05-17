@@ -8,6 +8,7 @@
 #include <string>
 #include <variant>
 
+#include <iso15118/d20/ac_der_control.hpp>
 #include <iso15118/d20/ev_information.hpp>
 #include <iso15118/d20/limits.hpp>
 #include <iso15118/d20/session.hpp>
@@ -45,6 +46,12 @@ struct DcMaximumLimits {
     float voltage{NAN};
     float current{NAN};
     float power{NAN};
+};
+
+struct AcDerControlDiagnostic {
+    message_20::Type request_type{message_20::Type::None};
+    dt::ResponseCode response_code{dt::ResponseCode::OK};
+    d20::AcDerControlFailureReason failure_reason{d20::AcDerControlFailureReason::None};
 };
 
 using PresentVoltage = dt::RationalNumber;
@@ -88,6 +95,7 @@ struct Callbacks {
     std::function<std::optional<dt::ServiceParameterList>(uint16_t)> get_vas_parameters;
     std::function<void(const dt::VasSelectedServiceList&)> selected_vas_services;
     std::function<void(const AcLimits&)> ac_limits;
+    std::function<void(const AcDerControlDiagnostic&)> ac_der_control_diagnostic;
     std::function<void(const std::string&, const std::string&)> ev_termination;
 };
 
@@ -116,6 +124,7 @@ public:
     std::optional<dt::ServiceParameterList> get_vas_parameters(uint16_t) const;
     void selected_vas_services(const dt::VasSelectedServiceList&) const;
     void ac_limits(const feedback::AcLimits&) const;
+    void ac_der_control_diagnostic(const feedback::AcDerControlDiagnostic&) const;
     void ev_termination(const std::string&, const std::string&) const;
 
 private:

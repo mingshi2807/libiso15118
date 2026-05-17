@@ -12,6 +12,11 @@
 
 namespace iso15118::d20::state {
 
+struct AcChargeLoopResult {
+    message_20::AC_ChargeLoopResponse response;
+    d20::AcDerControlFailureReason ac_der_failure_reason{d20::AcDerControlFailureReason::None};
+};
+
 message_20::AC_ChargeLoopResponse handle_request(const message_20::AC_ChargeLoopRequest& req,
                                                  const d20::Session& session, bool stop, bool pause,
                                                  float target_frequency, const AcTargetPower& target_powers,
@@ -34,5 +39,13 @@ handle_request(const message_20::AC_ChargeLoopRequest& req, const d20::Session& 
                float target_frequency, const d20::AcTransferLimits& ac_limits, const AcTargetPower& target_powers,
                const AcPresentPower& present_powers, const UpdateDynamicModeParameters& dynamic_parameters,
                const IAcDerControlProvider& ac_der_control_provider);
+
+AcChargeLoopResult handle_request_with_diagnostics(const message_20::AC_ChargeLoopRequest& req,
+                                                   const d20::Session& session, bool stop, bool pause,
+                                                   float target_frequency, const d20::AcTransferLimits& ac_limits,
+                                                   const AcTargetPower& target_powers,
+                                                   const AcPresentPower& present_powers,
+                                                   const UpdateDynamicModeParameters& dynamic_parameters,
+                                                   const IAcDerControlProvider& ac_der_control_provider);
 
 } // namespace iso15118::d20::state

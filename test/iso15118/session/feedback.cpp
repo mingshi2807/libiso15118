@@ -20,6 +20,7 @@ struct FeedbackResults {
     iso15118::d20::EVInformation ev_information;
     uint16_t id;
     dt::VasSelectedServiceList selected_vas;
+    feedback::AcDerControlDiagnostic ac_der_control_diagnostic;
 };
 
 SCENARIO("Feedback Tests") {
@@ -60,6 +61,9 @@ SCENARIO("Feedback Tests") {
     };
     callbacks.selected_vas_services = [&feedback_results](dt::VasSelectedServiceList selected_vas_) {
         feedback_results.selected_vas = selected_vas_;
+    };
+    callbacks.ac_der_control_diagnostic = [&feedback_results](const feedback::AcDerControlDiagnostic& diagnostic) {
+        feedback_results.ac_der_control_diagnostic = diagnostic;
     };
 
     const auto feedback = Feedback(callbacks);
@@ -317,6 +321,20 @@ SCENARIO("Feedback Tests") {
             REQUIRE(feedback_results.selected_vas.at(0).parameter_set_id == expected.at(0).parameter_set_id);
             REQUIRE(feedback_results.selected_vas.at(1).service_id == expected.at(1).service_id);
             REQUIRE(feedback_results.selected_vas.at(1).parameter_set_id == expected.at(1).parameter_set_id);
+        }
+    }
+
+    GIVEN("Test ac_der_control_diagnostic") {
+        const feedback::AcDerControlDiagnostic expected{iso15118::message_20::Type::AC_ChargeLoopReq,
+                                                        dt::ResponseCode::FAILED,
+                                                        iso15118::d20::AcDerControlFailureReason::StaleGridPolicy};
+
+        feedback.ac_der_control_diagnostic(expected);
+
+        THEN("AC DER diagnostic should be like expected") {
+            REQUIRE(feedback_results.ac_der_control_diagnostic.request_type == expected.request_type);
+            REQUIRE(feedback_results.ac_der_control_diagnostic.response_code == expected.response_code);
+            REQUIRE(feedback_results.ac_der_control_diagnostic.failure_reason == expected.failure_reason);
         }
     }
 }

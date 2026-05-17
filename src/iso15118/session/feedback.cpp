@@ -82,4 +82,8 @@ void Feedback::ac_limits(const feedback::AcLimits& limits) const {
     call_if_available(callbacks.ac_limits, limits);
 }
 
+void Feedback::ac_der_control_diagnostic(const feedback::AcDerControlDiagnostic& diagnostic) const {
+    call_if_available(callbacks.ac_der_control_diagnostic, diagnostic);
+}
+
 } // namespace iso15118::session
