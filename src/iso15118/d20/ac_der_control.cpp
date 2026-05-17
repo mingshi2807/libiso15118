@@ -93,6 +93,17 @@ dt::DERControlFunctions make_required_ac_der_control_functions() {
     return control_functions;
 }
 
+} // namespace
+
+bool has_required_ac_der_control_functions(const dt::DERControlFunctions& controls) {
+    return controls.volt_watt and controls.dso_q_setpoint_provision and controls.dso_cos_phi_setpoint_provision and
+           controls.dc_injection_restriction and controls.under_frequency_watt and controls.over_frequency_watt and
+           controls.volt_var and controls.watt_var and controls.watt_cos_phi and
+           controls.over_voltage_fault_ride_through and controls.zero_current;
+}
+
+namespace {
+
 bool supports_selected_controls(const dt::DERControlFunctions& selected, const dt::DERControlFunctions& supported) {
     return (not selected.volt_watt or supported.volt_watt) and
            (not selected.dso_q_setpoint_provision or supported.dso_q_setpoint_provision) and

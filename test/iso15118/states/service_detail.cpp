@@ -204,6 +204,30 @@ SCENARIO("Service detail state handling") {
         }
     }
 
+    GIVEN("Bad Case - AC_DER Service with incomplete DER control functions") {
+        d20::Session session = d20::Session();
+        session.offered_services.energy_services = {dt::ServiceCategory::AC_DER};
+
+        auto session_config = d20::SessionConfig(evse_setup);
+        REQUIRE_FALSE(session_config.ac_der_parameter_list.empty());
+        session_config.ac_der_parameter_list[0].control_functions = {};
+        session_config.ac_der_parameter_list[0].control_functions.volt_watt = true;
+
+        message_20::ServiceDetailRequest req;
+        req.header.session_id = session.get_id();
+        req.header.timestamp = 1691411798;
+        req.service = message_20::to_underlying_value(dt::ServiceCategory::AC_DER);
+
+        const auto res = d20::state::handle_request(req, session, session_config, std::nullopt);
+
+        THEN("ResponseCode: FAILED_ServiceIDInvalid and invalid DER parameters are not offered") {
+            REQUIRE(res.response_code == dt::ResponseCode::FAILED_ServiceIDInvalid);
+            REQUIRE(res.service == message_20::to_underlying_value(dt::ServiceCategory::AC_DER));
+            REQUIRE(res.service_parameter_list.empty());
+            REQUIRE(session.offered_services.ac_der_parameter_list.empty());
+        }
+    }
+
     GIVEN("Good Case - 2x DC Services") {
 
         d20::Session session = d20::Session();

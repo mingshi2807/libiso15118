@@ -124,8 +124,14 @@ message_20::ServiceDetailResponse handle_request(const message_20::ServiceDetail
     } else if (req.service == message_20::to_underlying_value(dt::ServiceCategory::AC_DER)) {
         res.service = message_20::to_underlying_value(dt::ServiceCategory::AC_DER);
         for (auto& parameter_set : config.ac_der_parameter_list) {
+            if (not has_required_ac_der_control_functions(parameter_set.control_functions)) {
+                continue;
+            }
             session.offered_services.ac_der_parameter_list[id] = parameter_set;
             res.service_parameter_list.push_back(dt::ParameterSet(id++, parameter_set));
+        }
+        if (res.service_parameter_list.empty()) {
+            return response_with_code(res, dt::ResponseCode::FAILED_ServiceIDInvalid);
         }
     } else if (req.service == message_20::to_underlying_value(dt::ServiceCategory::DC)) {
         res.service = message_20::to_underlying_value(dt::ServiceCategory::DC);

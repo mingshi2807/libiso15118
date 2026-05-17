@@ -64,6 +64,7 @@ handle_request(const message_20::ServiceDiscoveryRequest& req, d20::Session& ses
     // Service renegotiation is not yet supported
     res.service_renegotiation_supported = false;
     session.service_renegotiation_supported = false;
+    session.offered_services = d20::OfferedServices{};
 
     // Reset default value
     res.energy_transfer_service_list.clear();

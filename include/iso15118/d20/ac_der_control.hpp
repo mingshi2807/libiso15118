@@ -69,6 +69,7 @@ public:
 };
 
 AcDerControlConfig make_default_ac_der_control_config();
+bool has_required_ac_der_control_functions(const dt::DERControlFunctions& controls);
 std::shared_ptr<const IAcDerControlProvider> make_static_ac_der_control_provider(AcDerControlConfig config);
 AcDerSeccControlSnapshots make_default_ac_der_secc_control_snapshots();
 std::shared_ptr<const IAcDerControlProvider> make_secc_ac_der_control_provider(AcDerSeccControlSnapshots snapshots);

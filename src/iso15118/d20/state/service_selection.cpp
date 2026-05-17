@@ -104,6 +104,15 @@ message_20::ServiceSelectionResponse handle_request(const message_20::ServiceSel
         return response_with_code(res, dt::ResponseCode::FAILED_ServiceSelectionInvalid);
     }
 
+    if (req.selected_energy_transfer_service.service_id == dt::ServiceCategory::AC_DER) {
+        const auto& ac_der_parameter_list = session.offered_services.ac_der_parameter_list;
+        const auto parameter_set = ac_der_parameter_list.find(req.selected_energy_transfer_service.parameter_set_id);
+        if (parameter_set == ac_der_parameter_list.end() or
+            not has_required_ac_der_control_functions(parameter_set->second.control_functions)) {
+            return response_with_code(res, dt::ResponseCode::FAILED_ServiceSelectionInvalid);
+        }
+    }
+
     session.selected_service_parameters(req.selected_energy_transfer_service.service_id,
                                         req.selected_energy_transfer_service.parameter_set_id);
 

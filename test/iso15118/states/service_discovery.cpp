@@ -218,6 +218,44 @@ SCENARIO("Service discovery state handling") {
         }
     }
 
+    GIVEN("Good Case - Service discovery replaces stale AC_BPT offers with AC_DER offers") {
+        d20::Session session = d20::Session();
+        session.offered_services.energy_services = {dt::ServiceCategory::AC_BPT};
+        session.offered_services.ac_bpt_parameter_list[0] = {{
+                                                                 dt::AcConnector::ThreePhase,
+                                                                 dt::ControlMode::Dynamic,
+                                                                 dt::MobilityNeedsMode::ProvidedByEvcc,
+                                                                 230,
+                                                                 dt::Pricing::NoPricing,
+                                                             },
+                                                             dt::BptChannel::Unified,
+                                                             dt::GeneratorMode::GridFollowing,
+                                                             dt::GridCodeIslandingDetectionMethod::Passive};
+
+        message_20::ServiceDiscoveryRequest req;
+        req.header.session_id = session.get_id();
+        req.header.timestamp = 1691411798;
+
+        auto& supported_service_ids = req.supported_service_ids.emplace();
+        supported_service_ids.push_back(message_20::to_underlying_value(dt::ServiceCategory::AC_DER));
+
+        std::vector<dt::ServiceCategory> supported_energy_transfer_services = {dt::ServiceCategory::AC_BPT,
+                                                                               dt::ServiceCategory::AC_DER};
+        std::vector<dt::ServiceCategory> ev_energy_services{};
+
+        const auto res =
+            d20::state::handle_request(req, session, supported_energy_transfer_services, {}, ev_energy_services);
+
+        THEN("ResponseCode: OK and stale AC_BPT parameter sets are cleared") {
+            REQUIRE(res.response_code == dt::ResponseCode::OK);
+            REQUIRE(res.energy_transfer_service_list.size() == 1);
+            REQUIRE(res.energy_transfer_service_list[0].service_id == dt::ServiceCategory::AC_DER);
+            REQUIRE(session.offered_services.energy_services.size() == 1);
+            REQUIRE(session.offered_services.energy_services[0] == dt::ServiceCategory::AC_DER);
+            REQUIRE(session.offered_services.ac_bpt_parameter_list.empty());
+        }
+    }
+
     // [V2G20-1644]
     GIVEN("Good case - Resuming secc shall provide the same service ids and parameter set ids "
           "(ServiceRenegotiationSupported: false)") {
