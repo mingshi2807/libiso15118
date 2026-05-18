@@ -19,16 +19,24 @@ namespace iso15118::message_20 {
 class Variant {
 public:
     using CustomDeleter = void (*)(void*);
+    using DataPtr = std::unique_ptr<void, CustomDeleter>;
+
     Variant(io::v2gtp::PayloadType, const io::StreamInputView&);
     template <typename MessageType> Variant(const MessageType& in) {
         static_assert(TypeTrait<MessageType>::type != Type::None, "Unhandled type!");
 
-        data = new MessageType;
-        *static_cast<MessageType*>(data) = in;
-        custom_deleter = [](void* ptr) { delete static_cast<MessageType*>(ptr); };
+        auto* ptr = new MessageType;
+        *ptr = in;
+        data = DataPtr(ptr, [](void* p) { delete static_cast<MessageType*>(p); });
         type = message_20::TypeTrait<MessageType>::type;
     }
-    ~Variant();
+    ~Variant() = default;
+
+    // Move-only: raw void* would double-free on copy.
+    Variant(Variant&&) = default;
+    Variant& operator=(Variant&&) = default;
+    Variant(const Variant&) = delete;
+    Variant& operator=(const Variant&) = delete;
 
     Type get_type() const;
 
@@ -37,10 +45,12 @@ public:
     template <typename T> const T& get() const {
         static_assert(TypeTrait<T>::type != Type::None, "Unhandled type!");
         if (TypeTrait<T>::type != type) {
-            throw std::runtime_error("Illegal message type access");
+            throw std::runtime_error("Illegal message type access: expected " +
+                                     std::to_string(static_cast<int>(TypeTrait<T>::type)) + " but variant holds " +
+                                     std::to_string(static_cast<int>(type)));
         }
 
-        return *static_cast<T*>(data);
+        return *static_cast<T*>(data.get());
     }
 
     template <typename T> T const* get_if() const {
@@ -49,12 +59,11 @@ public:
             return nullptr;
         }
 
-        return static_cast<T*>(data);
+        return static_cast<T*>(data.get());
     }
 
 private:
-    CustomDeleter custom_deleter{nullptr};
-    void* data{nullptr};
+    DataPtr data{nullptr, nullptr};
     Type type{Type::None};
     std::string error;
 };

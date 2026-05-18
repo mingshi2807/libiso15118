@@ -145,8 +145,12 @@ static void handle_ac(VariantAccess& va) {
 
 Variant::Variant(io::v2gtp::PayloadType payload_type, const io::StreamInputView& buffer_view) {
 
+    void* raw_data = nullptr;
+    Type raw_type = Type::None;
+    CustomDeleter raw_deleter = nullptr;
+
     VariantAccess va{
-        get_exi_input_stream(buffer_view), this->data, this->type, this->custom_deleter, this->error,
+        get_exi_input_stream(buffer_view), raw_data, raw_type, raw_deleter, this->error,
     };
 
     if (payload_type == PayloadType::SAP) {
@@ -161,18 +165,13 @@ Variant::Variant(io::v2gtp::PayloadType payload_type, const io::StreamInputView&
         logf_warning("Unknown type");
     }
 
-    if (data) {
-        // in case data was set, make sure the custom deleter and the type were set!
-        assert(custom_deleter != nullptr);
-        assert(type != Type::None);
+    if (raw_data) {
+        assert(raw_deleter != nullptr);
+        assert(raw_type != Type::None);
+        data = DataPtr(raw_data, raw_deleter);
+        type = raw_type;
     } else {
         logf_error("Failed due to: %s\n", error.c_str());
-    }
-}
-
-Variant::~Variant() {
-    if (data) {
-        custom_deleter(data);
     }
 }
 
