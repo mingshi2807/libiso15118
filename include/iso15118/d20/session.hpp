@@ -17,6 +17,8 @@ namespace iso15118::d20 {
 
 namespace dt = message_20::datatypes;
 
+using ServiceId = uint16_t;
+
 // Key: service IDs, value: vector with the parameter set ids
 using CustomVasList = std::map<std::uint16_t, std::vector<uint16_t>>;
 
@@ -196,6 +198,8 @@ public:
     bool service_renegotiation_supported{false};
 
 private:
+    static std::array<uint8_t, ID_LENGTH> generate_session_id();
+
     // NOTE (aw): could be const
     std::array<uint8_t, ID_LENGTH> id{};
 

@@ -19,8 +19,8 @@ static void log_sdp_packet(const iso15118::io::SdpPacket& sdp) {
     static constexpr auto ESCAPED_BYTE_CHAR_COUNT = 4;
     auto payload_string_buffer = std::make_unique<char[]>(sdp.get_payload_length() * ESCAPED_BYTE_CHAR_COUNT + 1);
     for (std::size_t i = 0; i < sdp.get_payload_length(); ++i) {
-        snprintf(payload_string_buffer.get() + i * ESCAPED_BYTE_CHAR_COUNT, ESCAPED_BYTE_CHAR_COUNT + 1, "\\x%02hx",
-                 sdp.get_payload_buffer()[i]);
+        snprintf(payload_string_buffer.get() + i * ESCAPED_BYTE_CHAR_COUNT, ESCAPED_BYTE_CHAR_COUNT + 1, "\\x%02x",
+                 static_cast<unsigned int>(sdp.get_payload_buffer()[i]));
     }
 
     iso15118::logf_info("[SDP Packet in]: Header: %04hx, Payload: %s", sdp.get_payload_type(),
