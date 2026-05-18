@@ -2,6 +2,7 @@
 
 `IAcDerControlProvider` is the SECC application-layer contract for ISO 15118-20 AMD1 AC_DER IEC control data.
 The standards-to-code matrix is maintained in `docs/ac_der_iec_traceability.md`.
+The expert-review checklist is maintained in `docs/ac_der_iec_acceptance_pack.md`.
 
 The protocol state machine owns message sequencing. The SECC application owns the DER policy:
 
@@ -150,6 +151,12 @@ runs both demo examples, and then runs the full CTest suite. Override the build 
 
 ```bash
 BUILD_DIR=build-local-der tools/ac_der_iec_readiness.sh
+```
+
+For expert review handoff, print the acceptance pack index:
+
+```bash
+tools/ac_der_iec_acceptance_pack.sh
 ```
 
 ## Coverage Evidence
