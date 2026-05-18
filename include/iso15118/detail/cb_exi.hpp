@@ -5,6 +5,7 @@
 #include <stdexcept>
 
 #include <cbv2g/common/exi_bitstream.h>
+#include <iso15118/detail/helper.hpp>
 
 #include <iso15118/io/stream_view.hpp>
 
@@ -86,14 +87,18 @@ template <typename MessageType> int serialize_to_exi(const MessageType& in, exi_
 template <typename MessageType>
 size_t serialize_helper(const MessageType& in, const io::StreamOutputView& stream_view) {
     auto out = get_exi_output_stream(stream_view);
-
     const auto error = serialize_to_exi(in, out);
-
     if (error != 0) {
-        throw std::runtime_error("Could not encode exi: " + std::to_string(error));
+        logf_error("Could not encode EXI message (error %d); discarding response", error);
+        return 0;
     }
-
-    return exi_bitstream_get_length(&out);
+    const auto len = exi_bitstream_get_length(&out);
+    if (len > stream_view.payload_len) {
+        logf_error("EXI encoding overflowed output buffer (%zu > %zu bytes); discarding response",
+                   len, stream_view.payload_len);
+        return 0;
+    }
+    return len;
 }
 
 } // namespace iso15118::message_20

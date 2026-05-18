@@ -3,11 +3,8 @@
 #include <iso15118/io/connection_plain.hpp>
 
 #include <cassert>
-#include <chrono>
 #include <cinttypes>
 #include <cstring>
-#include <thread>
-
 #include <endian.h>
 #include <unistd.h>
 
@@ -150,9 +147,6 @@ void ConnectionPlain::close() {
     if (shutdown_result == -1) {
         logf_error("shutdown() failed");
     }
-
-    // Waiting for client closing the connection
-    std::this_thread::sleep_for(std::chrono::seconds(2));
 
     poll_manager.unregister_fd(fd);
 

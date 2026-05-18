@@ -103,11 +103,13 @@ PeerRequestContext SdpServer::get_peer_request() {
     const auto read_result = recvfrom(fd, udp_buffer, sizeof(udp_buffer), 0,
                                       reinterpret_cast<struct sockaddr*>(&peer_address), &peer_addr_len);
     if (read_result <= 0) {
-        log_and_throw("Read on sdp server socket failed");
+        logf_error("Read on sdp server socket failed");
+        return PeerRequestContext{false};
     }
 
     if (peer_addr_len > sizeof(peer_address)) {
-        log_and_throw("Unexpected address length during read on sdp server socket");
+        logf_error("Unexpected address length during read on sdp server socket");
+        return PeerRequestContext{false};
     }
 
     log_peer_hostname(peer_address);

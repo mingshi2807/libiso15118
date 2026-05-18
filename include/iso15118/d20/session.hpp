@@ -56,29 +56,76 @@ struct SelectedServiceParameters {
     std::optional<float> evse_nominal_voltage;
     std::optional<dt::GridCodeIslandingDetectionMethod> selected_grid_code_method;
 
+    using ConnectorVariant = std::variant<dt::AcConnector, dt::DcConnector, dt::McsConnector>;
+
     SelectedServiceParameters() = default;
-    SelectedServiceParameters(dt::ServiceCategory energy_service_, dt::DcConnector dc_connector_,
-                              dt::ControlMode control_mode_, dt::MobilityNeedsMode mobility_, dt::Pricing pricing_);
-    SelectedServiceParameters(dt::ServiceCategory energy_service_, dt::DcConnector dc_connector_,
-                              dt::ControlMode control_mode_, dt::MobilityNeedsMode mobility_, dt::Pricing pricing_,
-                              dt::BptChannel channel_, dt::GeneratorMode generator_);
-    SelectedServiceParameters(dt::ServiceCategory energy_service_, dt::McsConnector mcs_connector_,
-                              dt::ControlMode control_mode_, dt::MobilityNeedsMode mobility_, dt::Pricing pricing_);
-    SelectedServiceParameters(dt::ServiceCategory energy_service_, dt::McsConnector mcs_connector_,
-                              dt::ControlMode control_mode_, dt::MobilityNeedsMode mobility_, dt::Pricing pricing_,
-                              dt::BptChannel channel_, dt::GeneratorMode generator_);
-    SelectedServiceParameters(dt::ServiceCategory energy_service_, dt::AcConnector ac_connector_,
-                              dt::ControlMode control_mode_, dt::MobilityNeedsMode mobility_, dt::Pricing pricing_,
-                              float nominal_voltage_);
-    SelectedServiceParameters(dt::ServiceCategory energy_service_, dt::AcConnector ac_connector_,
-                              dt::ControlMode control_mode_, dt::MobilityNeedsMode mobility_, dt::Pricing pricing_,
-                              dt::BptChannel channel_, dt::GeneratorMode generator_, float nominal_voltage_,
-                              dt::GridCodeIslandingDetectionMethod grid_code_method_);
-    SelectedServiceParameters(dt::ServiceCategory energy_service_, dt::AcConnector ac_connector_,
-                              dt::ControlMode control_mode_, dt::MobilityNeedsMode mobility_, dt::Pricing pricing_,
-                              dt::BptChannel channel_, dt::GeneratorMode generator_, float nominal_voltage_,
-                              dt::GridCodeIslandingDetectionMethod grid_code_method_,
-                              dt::DERControlFunctions control_functions_);
+
+    // Canonical constructor: mandatory fields + connector variant.
+    SelectedServiceParameters(dt::ServiceCategory, ConnectorVariant, dt::ControlMode,
+                              dt::MobilityNeedsMode, dt::Pricing);
+
+    // Backward-compatible delegating constructors (prefer canonical + setters for new code).
+    SelectedServiceParameters(dt::ServiceCategory s, dt::DcConnector c, dt::ControlMode m,
+                              dt::MobilityNeedsMode n, dt::Pricing p)
+        : SelectedServiceParameters(s, ConnectorVariant{c}, m, n, p) {}
+    SelectedServiceParameters(dt::ServiceCategory s, dt::DcConnector c, dt::ControlMode m,
+                              dt::MobilityNeedsMode n, dt::Pricing p, dt::BptChannel ch, dt::GeneratorMode g)
+        : SelectedServiceParameters(s, ConnectorVariant{c}, m, n, p) {
+        selected_bpt_channel = ch;
+        selected_generator_mode = g;
+    }
+    SelectedServiceParameters(dt::ServiceCategory s, dt::McsConnector c, dt::ControlMode m,
+                              dt::MobilityNeedsMode n, dt::Pricing p)
+        : SelectedServiceParameters(s, ConnectorVariant{c}, m, n, p) {}
+    SelectedServiceParameters(dt::ServiceCategory s, dt::McsConnector c, dt::ControlMode m,
+                              dt::MobilityNeedsMode n, dt::Pricing p, dt::BptChannel ch, dt::GeneratorMode g)
+        : SelectedServiceParameters(s, ConnectorVariant{c}, m, n, p) {
+        selected_bpt_channel = ch;
+        selected_generator_mode = g;
+    }
+    SelectedServiceParameters(dt::ServiceCategory s, dt::AcConnector c, dt::ControlMode m,
+                              dt::MobilityNeedsMode n, dt::Pricing p, float nominal_voltage_)
+        : SelectedServiceParameters(s, ConnectorVariant{c}, m, n, p) {
+        evse_nominal_voltage = nominal_voltage_;
+    }
+    SelectedServiceParameters(dt::ServiceCategory s, dt::AcConnector c, dt::ControlMode m,
+                              dt::MobilityNeedsMode n, dt::Pricing p, dt::BptChannel ch, dt::GeneratorMode g,
+                              float v, dt::GridCodeIslandingDetectionMethod grid)
+        : SelectedServiceParameters(s, ConnectorVariant{c}, m, n, p) {
+        selected_bpt_channel = ch;
+        selected_generator_mode = g;
+        evse_nominal_voltage = v;
+        selected_grid_code_method = grid;
+    }
+    SelectedServiceParameters(dt::ServiceCategory s, dt::AcConnector c, dt::ControlMode m,
+                              dt::MobilityNeedsMode n, dt::Pricing p, dt::BptChannel ch, dt::GeneratorMode g,
+                              float v, dt::GridCodeIslandingDetectionMethod grid, dt::DERControlFunctions der)
+        : SelectedServiceParameters(s, ConnectorVariant{c}, m, n, p) {
+        selected_bpt_channel = ch;
+        selected_generator_mode = g;
+        evse_nominal_voltage = v;
+        selected_grid_code_method = grid;
+        selected_der_control_functions = der;
+    }
+
+    // Fluent setters for optional fields (recommended pattern for new code).
+    SelectedServiceParameters& with_bpt(dt::BptChannel ch, dt::GeneratorMode gen) {
+        selected_bpt_channel = ch;
+        selected_generator_mode = gen;
+        return *this;
+    }
+    SelectedServiceParameters& with_voltage(float v) {
+        evse_nominal_voltage = v;
+        return *this;
+    }
+    SelectedServiceParameters& with_grid_code(dt::GridCodeIslandingDetectionMethod gc) {
+        selected_grid_code_method = gc;
+        return *this;
+    }
+    SelectedServiceParameters& with_der(dt::DERControlFunctions der) {
+        selected_der_control_functions = der;
+        return *this;
+    }
 };
 
 // Todo(sl): missing services
