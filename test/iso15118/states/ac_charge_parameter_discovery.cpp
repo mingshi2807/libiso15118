@@ -508,6 +508,31 @@ SCENARIO("AC charge parameter discovery state handling") {
         }
     }
 
+    GIVEN("Bad Case: AC_DER scheduled mode is outside current SECC provider scope") {
+        const auto service_parameters = d20::SelectedServiceParameters(
+            dt::ServiceCategory::AC_DER, dt::AcConnector::ThreePhase, dt::ControlMode::Scheduled,
+            dt::MobilityNeedsMode::ProvidedByEvcc, dt::Pricing::NoPricing, dt::BptChannel::Unified,
+            dt::GeneratorMode::GridFollowing, 230, dt::GridCodeIslandingDetectionMethod::Passive,
+            get_mandatory_der_control_functions());
+
+        auto session = d20::Session(service_parameters);
+
+        message_20::AC_ChargeParameterDiscoveryRequest req;
+        req.header.session_id = session.get_id();
+        req.header.timestamp = 1691411798;
+        req.transfer_mode.emplace<DER_AC_ModeReq>();
+
+        auto limits = d20::AcTransferLimits{};
+        const auto provider = d20::make_secc_ac_der_control_provider(d20::make_default_ac_der_secc_control_snapshots());
+        const auto result = d20::state::handle_request_with_diagnostics(req, session, limits,
+                                                                        iso15118::d20::AcPresentPower{}, *provider);
+
+        THEN("ResponseCode: FAILED_WrongChargeParameter and unsupported mode reason is preserved") {
+            REQUIRE(result.response.response_code == dt::ResponseCode::FAILED_WrongChargeParameter);
+            REQUIRE(result.ac_der_failure_reason == d20::AcDerControlFailureReason::UnsupportedControlMode);
+        }
+    }
+
     GIVEN("Good Case: AC_DER") {
         const auto der_control_functions = get_mandatory_der_control_functions();
 

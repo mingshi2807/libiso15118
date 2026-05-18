@@ -178,7 +178,9 @@ SCENARIO("Service detail state handling") {
             REQUIRE(parameters.id == 0);
             REQUIRE(parameters.parameter.size() == 22);
             REQUIRE(parameters.parameter[8].name == "DERStandardControlFunctionsBitmap");
+            REQUIRE(std::get<int32_t>(parameters.parameter[8].value) == 0x3f);
             REQUIRE(parameters.parameter[9].name == "DERExtendedControlFunctionsBitmap");
+            REQUIRE(std::get<int32_t>(parameters.parameter[9].value) == 0x3f);
             REQUIRE(parameters.parameter[10].name == "VoltWatt");
             REQUIRE(std::get<bool>(parameters.parameter[10].value));
             REQUIRE(parameters.parameter[11].name == "DSOQSetPointProvision");
@@ -199,8 +201,33 @@ SCENARIO("Service detail state handling") {
             REQUIRE(std::get<bool>(parameters.parameter[18].value));
             REQUIRE(parameters.parameter[19].name == "OverVoltageFaultRideThroughMode");
             REQUIRE(std::get<bool>(parameters.parameter[19].value));
+            REQUIRE(parameters.parameter[20].name == "UnderVoltageFaultRideThroughMode");
+            REQUIRE(std::get<bool>(parameters.parameter[20].value));
             REQUIRE(parameters.parameter[21].name == "ZeroCurrentMode");
             REQUIRE(std::get<bool>(parameters.parameter[21].value));
+        }
+    }
+
+    GIVEN("Bad Case - AC_DER Service without under-voltage fault ride-through") {
+        d20::Session session = d20::Session();
+        session.offered_services.energy_services = {dt::ServiceCategory::AC_DER};
+
+        auto session_config = d20::SessionConfig(evse_setup);
+        REQUIRE_FALSE(session_config.ac_der_parameter_list.empty());
+        session_config.ac_der_parameter_list[0].control_functions.under_voltage_fault_ride_through = false;
+
+        message_20::ServiceDetailRequest req;
+        req.header.session_id = session.get_id();
+        req.header.timestamp = 1691411798;
+        req.service = message_20::to_underlying_value(dt::ServiceCategory::AC_DER);
+
+        const auto res = d20::state::handle_request(req, session, session_config, std::nullopt);
+
+        THEN("ResponseCode: FAILED_ServiceIDInvalid and invalid DER parameters are not offered") {
+            REQUIRE(res.response_code == dt::ResponseCode::FAILED_ServiceIDInvalid);
+            REQUIRE(res.service == message_20::to_underlying_value(dt::ServiceCategory::AC_DER));
+            REQUIRE(res.service_parameter_list.empty());
+            REQUIRE(session.offered_services.ac_der_parameter_list.empty());
         }
     }
 

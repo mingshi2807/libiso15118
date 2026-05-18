@@ -4,8 +4,10 @@
 
 #include <iso15118/d20/ac_der_control.hpp>
 
+#include <functional>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace d20 = iso15118::d20;
 namespace dt = iso15118::message_20::datatypes;
@@ -18,6 +20,25 @@ float value_of(const dt::RationalNumber& value) {
 
 d20::AcDerControlContext make_ac_der_context(const dt::DERControlFunctions& functions) {
     return {dt::ServiceCategory::AC_DER, dt::ControlMode::Dynamic, dt::MobilityNeedsMode::ProvidedByEvcc, functions};
+}
+
+using ControlMutator = std::function<void(dt::DERControlFunctions&)>;
+
+std::vector<ControlMutator> mandatory_control_mutators() {
+    return {
+        [](dt::DERControlFunctions& controls) { controls.volt_watt = false; },
+        [](dt::DERControlFunctions& controls) { controls.dso_q_setpoint_provision = false; },
+        [](dt::DERControlFunctions& controls) { controls.dso_cos_phi_setpoint_provision = false; },
+        [](dt::DERControlFunctions& controls) { controls.dc_injection_restriction = false; },
+        [](dt::DERControlFunctions& controls) { controls.under_frequency_watt = false; },
+        [](dt::DERControlFunctions& controls) { controls.over_frequency_watt = false; },
+        [](dt::DERControlFunctions& controls) { controls.volt_var = false; },
+        [](dt::DERControlFunctions& controls) { controls.watt_var = false; },
+        [](dt::DERControlFunctions& controls) { controls.watt_cos_phi = false; },
+        [](dt::DERControlFunctions& controls) { controls.over_voltage_fault_ride_through = false; },
+        [](dt::DERControlFunctions& controls) { controls.under_voltage_fault_ride_through = false; },
+        [](dt::DERControlFunctions& controls) { controls.zero_current = false; },
+    };
 }
 
 } // namespace
@@ -72,6 +93,27 @@ SCENARIO("AC DER SECC control provider") {
         REQUIRE(value_of(config->dso_q_setpoint.value) == 700.0f);
         REQUIRE(value_of(config->dso_cos_phi_setpoint.value) == 0.95f);
         REQUIRE(config->dso_cos_phi_setpoint.excitation == dt::DERPowerFactorExcitation::UnderExcited);
+    }
+
+    GIVEN("default AC_DER IEC capability exposes all mandatory control bits and bitmap values") {
+        const auto snapshots = d20::make_default_ac_der_secc_control_snapshots();
+        const auto& controls = snapshots.evse_capability.supported_control_functions;
+
+        REQUIRE(d20::has_required_ac_der_control_functions(controls));
+        REQUIRE(controls.standard_bitmap == 0x3f);
+        REQUIRE(controls.extended_bitmap == 0x3f);
+        REQUIRE(controls.volt_watt);
+        REQUIRE(controls.dso_q_setpoint_provision);
+        REQUIRE(controls.dso_cos_phi_setpoint_provision);
+        REQUIRE(controls.dc_injection_restriction);
+        REQUIRE(controls.under_frequency_watt);
+        REQUIRE(controls.over_frequency_watt);
+        REQUIRE(controls.volt_var);
+        REQUIRE(controls.watt_var);
+        REQUIRE(controls.watt_cos_phi);
+        REQUIRE(controls.over_voltage_fault_ride_through);
+        REQUIRE(controls.under_voltage_fault_ride_through);
+        REQUIRE(controls.zero_current);
     }
 
     GIVEN("a stale grid policy snapshot") {
@@ -290,6 +332,33 @@ SCENARIO("AC DER SECC control provider") {
 
         REQUIRE_FALSE(result.config.has_value());
         REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::MissingSelectedMandatoryControlFunctions);
+    }
+
+    GIVEN("any missing selected mandatory control function rejects AC_DER") {
+        const auto snapshots = d20::make_default_ac_der_secc_control_snapshots();
+        const auto provider = d20::make_secc_ac_der_control_provider(snapshots);
+
+        for (const auto& drop_control : mandatory_control_mutators()) {
+            auto selected_functions = snapshots.evse_capability.supported_control_functions;
+            drop_control(selected_functions);
+
+            const auto result = provider->get_ac_der_control_result(make_ac_der_context(selected_functions));
+
+            REQUIRE_FALSE(result.config.has_value());
+            REQUIRE(result.failure_reason == d20::AcDerControlFailureReason::MissingSelectedMandatoryControlFunctions);
+        }
+    }
+
+    GIVEN("any missing supported mandatory control function rejects SECC snapshots at preflight") {
+        for (const auto& drop_control : mandatory_control_mutators()) {
+            auto snapshots = d20::make_default_ac_der_secc_control_snapshots();
+            drop_control(snapshots.evse_capability.supported_control_functions);
+
+            REQUIRE_FALSE(
+                d20::has_required_ac_der_control_functions(snapshots.evse_capability.supported_control_functions));
+            REQUIRE(d20::validate_ac_der_secc_control_snapshots(snapshots) ==
+                    d20::AcDerControlFailureReason::MissingSupportedMandatoryControlFunctions);
+        }
     }
 
     GIVEN("a static AC DER provider result is requested") {

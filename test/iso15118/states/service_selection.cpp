@@ -205,6 +205,62 @@ SCENARIO("Service selection state handling") {
             REQUIRE(selected_services.selected_der_control_functions.has_value());
             REQUIRE(selected_services.selected_der_control_functions->volt_watt);
             REQUIRE(selected_services.selected_der_control_functions->dso_q_setpoint_provision);
+            REQUIRE(selected_services.selected_der_control_functions->dso_cos_phi_setpoint_provision);
+            REQUIRE(selected_services.selected_der_control_functions->dc_injection_restriction);
+            REQUIRE(selected_services.selected_der_control_functions->under_frequency_watt);
+            REQUIRE(selected_services.selected_der_control_functions->over_frequency_watt);
+            REQUIRE(selected_services.selected_der_control_functions->volt_var);
+            REQUIRE(selected_services.selected_der_control_functions->watt_var);
+            REQUIRE(selected_services.selected_der_control_functions->watt_cos_phi);
+            REQUIRE(selected_services.selected_der_control_functions->over_voltage_fault_ride_through);
+            REQUIRE(selected_services.selected_der_control_functions->under_voltage_fault_ride_through);
+            REQUIRE(selected_services.selected_der_control_functions->zero_current);
+            REQUIRE(selected_services.selected_der_control_functions->standard_bitmap == 0x3f);
+            REQUIRE(selected_services.selected_der_control_functions->extended_bitmap == 0x3f);
+        }
+    }
+
+    GIVEN("Bad case - AC_DER without under-voltage fault ride-through") {
+        d20::Session session = d20::Session();
+
+        dt::DERControlFunctions der_control_functions;
+        der_control_functions.volt_watt = true;
+        der_control_functions.dso_q_setpoint_provision = true;
+        der_control_functions.dso_cos_phi_setpoint_provision = true;
+        der_control_functions.dc_injection_restriction = true;
+        der_control_functions.under_frequency_watt = true;
+        der_control_functions.over_frequency_watt = true;
+        der_control_functions.volt_var = true;
+        der_control_functions.watt_var = true;
+        der_control_functions.watt_cos_phi = true;
+        der_control_functions.over_voltage_fault_ride_through = true;
+        der_control_functions.zero_current = true;
+        der_control_functions.standard_bitmap = 0x3f;
+        der_control_functions.extended_bitmap = 0x3f;
+
+        session.offered_services.energy_services = {dt::ServiceCategory::AC_DER};
+        session.offered_services.ac_der_parameter_list[0] = {
+            {{dt::AcConnector::ThreePhase, dt::ControlMode::Dynamic, dt::MobilityNeedsMode::ProvidedByEvcc, 230,
+              dt::Pricing::NoPricing},
+             dt::BptChannel::Unified,
+             dt::GeneratorMode::GridFollowing,
+             dt::GridCodeIslandingDetectionMethod::Passive},
+            der_control_functions};
+
+        message_20::ServiceSelectionRequest req;
+        req.header.session_id = session.get_id();
+        req.header.timestamp = 1691411798;
+        req.selected_energy_transfer_service.service_id = dt::ServiceCategory::AC_DER;
+        req.selected_energy_transfer_service.parameter_set_id = 0;
+
+        const auto res = d20::state::handle_request(req, session);
+
+        THEN("ResponseCode: FAILED_ServiceSelectionInvalid and AC_DER is not selected") {
+            REQUIRE(res.response_code == dt::ResponseCode::FAILED_ServiceSelectionInvalid);
+
+            const auto selected_services = session.get_selected_services();
+            REQUIRE(selected_services.selected_energy_service != dt::ServiceCategory::AC_DER);
+            REQUIRE_FALSE(selected_services.selected_der_control_functions.has_value());
         }
     }
 

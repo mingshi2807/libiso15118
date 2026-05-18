@@ -595,6 +595,31 @@ SCENARIO("AC charge loop state handling") {
         }
     }
 
+    GIVEN("Bad case - AC_DER scheduled mode is outside current SECC provider scope") {
+        d20::SelectedServiceParameters service_parameters = d20::SelectedServiceParameters(
+            dt::ServiceCategory::AC_DER, dt::AcConnector::ThreePhase, dt::ControlMode::Scheduled,
+            dt::MobilityNeedsMode::ProvidedByEvcc, dt::Pricing::NoPricing, dt::BptChannel::Unified,
+            dt::GeneratorMode::GridFollowing, 230, dt::GridCodeIslandingDetectionMethod::Passive,
+            get_mandatory_der_control_functions());
+
+        d20::Session session = d20::Session(service_parameters);
+        message_20::AC_ChargeLoopRequest req;
+        req.header.session_id = session.get_id();
+        req.header.timestamp = 1691411798;
+        req.control_mode.emplace<Scheduled_DER_AC_Req>();
+        req.meter_info_requested = false;
+
+        const auto provider = d20::make_secc_ac_der_control_provider(d20::make_default_ac_der_secc_control_snapshots());
+        const auto result = d20::state::handle_request_with_diagnostics(req, session, false, false, 50, ac_limits,
+                                                                        d20::AcTargetPower{}, d20::AcPresentPower{},
+                                                                        d20::UpdateDynamicModeParameters(), *provider);
+
+        THEN("ResponseCode: FAILED and unsupported mode reason is preserved") {
+            REQUIRE(result.response.response_code == dt::ResponseCode::FAILED);
+            REQUIRE(result.ac_der_failure_reason == d20::AcDerControlFailureReason::UnsupportedControlMode);
+        }
+    }
+
     GIVEN("Bad case - AC_DER dynamic mode with invalid DSO cos phi setpoint") {
         d20::SelectedServiceParameters service_parameters = d20::SelectedServiceParameters(
             dt::ServiceCategory::AC_DER, dt::AcConnector::ThreePhase, dt::ControlMode::Dynamic,
