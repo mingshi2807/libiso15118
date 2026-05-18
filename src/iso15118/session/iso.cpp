@@ -126,7 +126,7 @@ Session::Session(std::unique_ptr<io::IConnection> connection_, d20::SessionConfi
                  const session::feedback::Callbacks& callbacks, std::optional<d20::PauseContext>& pause_ctx) :
     connection(std::move(connection_)),
     log(this),
-    ctx(callbacks, log, std::move(session_config), pause_ctx, active_control_event, message_exchange, timeouts),
+    ctx(callbacks, log, std::move(session_config), pause_ctx, message_exchange, timeouts),
     fsm(ctx.create_state<d20::state::SupportedAppProtocol>()) {
 
     next_session_event = offset_time_point_by_ms(get_current_time_point(), SESSION_IDLE_TIMEOUT_MS);
@@ -158,7 +158,8 @@ TimePoint const& Session::poll() {
     }
 
     // send all of our queued control events
-    while ((active_control_event = control_event_queue.pop()) != std::nullopt) {
+    while (auto event = control_event_queue.pop()) {
+        ctx.set_control_event(std::move(*event));
 
         if (const auto control_data = ctx.get_control_event<d20::DcTransferLimits>()) {
             ctx.session_config.dc_limits = *control_data;

@@ -80,8 +80,6 @@ private:
 
     // control event buffer
     d20::ControlEventQueue control_event_queue;
-    std::optional<d20::ControlEvent> active_control_event{std::nullopt};
-
     d20::Context ctx;
 
     fsm::v2::FSM<d20::StateBase> fsm;

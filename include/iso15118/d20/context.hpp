@@ -77,7 +77,7 @@ class Context {
 public:
     // FIXME (aw): bundle arguments
     Context(session::feedback::Callbacks, session::SessionLogger&, d20::SessionConfig, std::optional<PauseContext>&,
-            const std::optional<ControlEvent>&, MessageExchange&, Timeouts&);
+            MessageExchange&, Timeouts&);
 
     template <typename StateType, typename... Args> BasePointerType create_state(Args&&... args) {
         return std::make_unique<StateType>(*this, std::forward<Args>(args)...);
@@ -94,7 +94,11 @@ public:
         return message_exchange.get_response<Msg>();
     }
 
-    const auto& get_control_event() {
+    void set_control_event(ControlEvent event) {
+        current_control_event = std::move(event);
+    }
+
+    const std::optional<ControlEvent>& get_control_event() const {
         return current_control_event;
     }
 
@@ -159,7 +163,7 @@ public:
     std::optional<AcPresentPower> cache_ac_present_power;
 
 private:
-    const std::optional<ControlEvent>& current_control_event;
+    std::optional<ControlEvent> current_control_event{std::nullopt};
     MessageExchange& message_exchange;
 
     std::optional<io::sha512_hash_t> vehicle_cert_hash{std::nullopt};

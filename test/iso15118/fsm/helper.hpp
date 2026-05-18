@@ -25,7 +25,7 @@ class FsmStateHelper {
 public:
     FsmStateHelper(const d20::SessionConfig& config, std::optional<d20::PauseContext>& pause_ctx_,
                    const session::feedback::Callbacks& callbacks) :
-        log(this), ctx(callbacks, log, config, pause_ctx_, active_control_event, msg_exch, timeouts) {
+        log(this), ctx(callbacks, log, config, pause_ctx_, msg_exch, timeouts) {
 
         session::logging::set_session_log_callback([](std::size_t, const session::logging::Event& event) {
             if (const auto* simple_event = std::get_if<session::logging::SimpleEvent>(&event)) {
@@ -47,7 +47,7 @@ public:
     }
 
     template <typename ControlEventType> void handle_control_event(const ControlEventType& control_event) {
-        active_control_event.emplace(control_event);
+        ctx.set_control_event(d20::ControlEvent{control_event});
     }
 
 private:
@@ -55,8 +55,6 @@ private:
     io::StreamOutputView output_stream_view{output_buffer.data(), output_buffer.size()};
 
     d20::MessageExchange msg_exch{output_stream_view};
-    std::optional<d20::ControlEvent> active_control_event;
-
     session::SessionLogger log;
 
     d20::Timeouts timeouts;
