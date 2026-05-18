@@ -136,3 +136,18 @@ The example translates those application inputs into `AcDerSeccControlSnapshots`
 cmake --build build-local-der --target example_ac_der_secc_application_adapter
 ./build-local-der/examples/example_ac_der_secc_application_adapter
 ```
+
+## Readiness Gate
+
+Run the AC_DER_IEC release-readiness gate before handoff or review:
+
+```bash
+tools/ac_der_iec_readiness.sh
+```
+
+By default it uses `build-pin-der`, builds the focused AC_DER_IEC tests and examples, runs the focused executables,
+runs both demo examples, and then runs the full CTest suite. Override the build directory when needed:
+
+```bash
+BUILD_DIR=build-local-der tools/ac_der_iec_readiness.sh
+```
