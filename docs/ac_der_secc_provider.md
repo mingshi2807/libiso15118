@@ -151,3 +151,32 @@ runs both demo examples, and then runs the full CTest suite. Override the build 
 ```bash
 BUILD_DIR=build-local-der tools/ac_der_iec_readiness.sh
 ```
+
+## Coverage Evidence
+
+Generate focused AC_DER_IEC coverage evidence before production-readiness review:
+
+```bash
+tools/ac_der_iec_coverage.sh
+```
+
+The script runs the readiness gate first, then writes AC_DER_IEC-focused coverage reports under
+`build-pin-der/ac_der_coverage/`:
+
+- `ac_der_iec_coverage.txt`: text summary for review comments
+- `ac_der_iec_coverage.xml`: Cobertura-compatible report for CI tools
+- `ac_der_iec_coverage_summary.json`: machine-readable summary
+- `html/index.html`: HTML summary report
+
+By default, the focused AC_DER_IEC line-coverage gate is 70%. Override it only when a release branch has a documented
+reason:
+
+```bash
+AC_DER_COVERAGE_MIN_LINE=75 BUILD_DIR=build-local-der tools/ac_der_iec_coverage.sh
+```
+
+When the local `gcovr` and `jinja2` versions support annotated source reports, enable the optional detailed HTML report:
+
+```bash
+AC_DER_COVERAGE_HTML_DETAILS=1 tools/ac_der_iec_coverage.sh
+```
