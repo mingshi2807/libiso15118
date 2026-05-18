@@ -1,6 +1,7 @@
 # AC DER SECC Provider Integration
 
 `IAcDerControlProvider` is the SECC application-layer contract for ISO 15118-20 AMD1 AC_DER IEC control data.
+The standards-to-code matrix is maintained in `docs/ac_der_iec_traceability.md`.
 
 The protocol state machine owns message sequencing. The SECC application owns the DER policy:
 
