@@ -6,6 +6,7 @@
 #pragma once
 
 #include <type_traits>
+#include <cstdio>
 #include <utility>
 #include <vector>
 
@@ -98,7 +99,11 @@ public:
     }
 
     ~FSM() {
-        m_current_state->leave();
+        try {
+            m_current_state->leave();
+        } catch (...) {
+            fprintf(stderr, "FSM: leave() threw during destruction; swallowing to avoid std::terminate\n");
+        }
     }
 
     template <typename... Args> auto feed(Args&&... args) {
@@ -163,7 +168,12 @@ public:
     ~NestedFSM() {
         // leave all the states in order
         for (auto leaf = m_state_stack.rbegin(); leaf != m_state_stack.rend();) {
-            (*leaf)->leave();
+            try {
+                (*leaf)->leave();
+            } catch (...) {
+                fprintf(stderr,
+                        "NestedFSM: leave() threw during destruction; swallowing and continuing unwind\n");
+            }
             leaf = std::next(leaf);
             m_state_stack.pop_back();
         }
