@@ -35,6 +35,11 @@ public:
 
     template <typename MessageType> void set_response(const MessageType& msg) {
         response_size = message_20::serialize(msg, response);
+        if (response_size == 0) {
+            // Encoding failed or overflowed the output buffer; discard.
+            response_available = false;
+            return;
+        }
         response_available = true;
         payload_type = message_20::PayloadTypeTrait<MessageType>::type;
         response_type = message_20::TypeTrait<MessageType>::type;
