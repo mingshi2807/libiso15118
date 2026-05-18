@@ -38,6 +38,7 @@ Out of scope for this acceptance decision:
 | Evidence | Location or command | Acceptance intent |
 |---|---|---|
 | Standards traceability | `docs/ac_der_iec_traceability.md` | Confirms every accepted feature has source metadata, implementation anchors, test anchors, status, and limitations. |
+| Latest readiness review | `docs/ac_der_iec_readiness_review.md` | Records the fresh RAG, code-review, build, test, coverage, and readiness-score evidence for the current review gate. |
 | SECC provider contract | `docs/ac_der_secc_provider.md` | Confirms the application-layer API, ownership boundary, runtime behavior, and demo integration path are explicit. |
 | Readiness gate | `tools/ac_der_iec_readiness.sh` | Builds focused targets, runs focused AC_DER_IEC tests, runs demos, then runs full CTest. |
 | Focused coverage gate | `tools/ac_der_iec_coverage.sh` | Produces AC_DER_IEC coverage reports and enforces the focused line-coverage threshold. |
