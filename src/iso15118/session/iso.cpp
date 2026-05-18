@@ -180,7 +180,7 @@ TimePoint const& Session::poll() {
         // stored temporarily here.
         // TODO(sl): Construct ControlEventCache Struct
 
-        const auto control_res = fsm.feed(d20::Event::CONTROL_MESSAGE);
+        [[maybe_unused]] const auto control_res = fsm.feed(d20::Event::CONTROL_MESSAGE);
         // Control events are cached in Context (e.g., cache_dynamic_mode_parameters)
         // and picked up by the next state; unhandled is expected here.
     }
