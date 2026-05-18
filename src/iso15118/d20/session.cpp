@@ -10,95 +10,15 @@ namespace iso15118::d20 {
 
 namespace dt = message_20::datatypes;
 
-SelectedServiceParameters::SelectedServiceParameters(dt::ServiceCategory energy_service_, dt::DcConnector dc_connector_,
+SelectedServiceParameters::SelectedServiceParameters(dt::ServiceCategory energy_service_,
+                                                     ConnectorVariant connector_,
                                                      dt::ControlMode control_mode_, dt::MobilityNeedsMode mobility_,
                                                      dt::Pricing pricing_) :
     selected_energy_service(energy_service_),
     selected_control_mode(control_mode_),
     selected_mobility_needs_mode(mobility_),
     selected_pricing(pricing_) {
-    selected_connector.emplace<dt::DcConnector>(dc_connector_);
-};
-
-SelectedServiceParameters::SelectedServiceParameters(dt::ServiceCategory energy_service_, dt::DcConnector dc_connector_,
-                                                     dt::ControlMode control_mode_, dt::MobilityNeedsMode mobility_,
-                                                     dt::Pricing pricing_, dt::BptChannel channel_,
-                                                     dt::GeneratorMode generator_) :
-    selected_energy_service(energy_service_),
-    selected_control_mode(control_mode_),
-    selected_mobility_needs_mode(mobility_),
-    selected_pricing(pricing_),
-    selected_bpt_channel(channel_),
-    selected_generator_mode(generator_) {
-    selected_connector.emplace<dt::DcConnector>(dc_connector_);
-};
-
-SelectedServiceParameters::SelectedServiceParameters(dt::ServiceCategory energy_service_, dt::AcConnector ac_connector_,
-                                                     dt::ControlMode control_mode_, dt::MobilityNeedsMode mobility_,
-                                                     dt::Pricing pricing_, float nominal_voltage_) :
-    selected_energy_service(energy_service_),
-    selected_control_mode(control_mode_),
-    selected_mobility_needs_mode(mobility_),
-    selected_pricing(pricing_),
-    evse_nominal_voltage(nominal_voltage_) {
-    selected_connector.emplace<dt::AcConnector>(ac_connector_);
-};
-
-SelectedServiceParameters::SelectedServiceParameters(dt::ServiceCategory energy_service_, dt::AcConnector ac_connector_,
-                                                     dt::ControlMode control_mode_, dt::MobilityNeedsMode mobility_,
-                                                     dt::Pricing pricing_, dt::BptChannel channel_,
-                                                     dt::GeneratorMode generator_, float nominal_voltage_,
-                                                     dt::GridCodeIslandingDetectionMethod grid_code_method_) :
-    selected_energy_service(energy_service_),
-    selected_control_mode(control_mode_),
-    selected_mobility_needs_mode(mobility_),
-    selected_pricing(pricing_),
-    selected_bpt_channel(channel_),
-    selected_generator_mode(generator_),
-    evse_nominal_voltage(nominal_voltage_),
-    selected_grid_code_method(grid_code_method_) {
-    selected_connector.emplace<dt::AcConnector>(ac_connector_);
-};
-
-SelectedServiceParameters::SelectedServiceParameters(dt::ServiceCategory energy_service_, dt::AcConnector ac_connector_,
-                                                     dt::ControlMode control_mode_, dt::MobilityNeedsMode mobility_,
-                                                     dt::Pricing pricing_, dt::BptChannel channel_,
-                                                     dt::GeneratorMode generator_, float nominal_voltage_,
-                                                     dt::GridCodeIslandingDetectionMethod grid_code_method_,
-                                                     dt::DERControlFunctions control_functions_) :
-    selected_energy_service(energy_service_),
-    selected_control_mode(control_mode_),
-    selected_mobility_needs_mode(mobility_),
-    selected_pricing(pricing_),
-    selected_bpt_channel(channel_),
-    selected_generator_mode(generator_),
-    selected_der_control_functions(control_functions_),
-    evse_nominal_voltage(nominal_voltage_),
-    selected_grid_code_method(grid_code_method_) {
-    selected_connector.emplace<dt::AcConnector>(ac_connector_);
-};
-
-SelectedServiceParameters::SelectedServiceParameters(dt::ServiceCategory energy_service_,
-                                                     dt::McsConnector mcs_connector_, dt::ControlMode control_mode_,
-                                                     dt::MobilityNeedsMode mobility_, dt::Pricing pricing_) :
-    selected_energy_service(energy_service_),
-    selected_control_mode(control_mode_),
-    selected_mobility_needs_mode(mobility_),
-    selected_pricing(pricing_) {
-    selected_connector.emplace<dt::McsConnector>(mcs_connector_);
-};
-
-SelectedServiceParameters::SelectedServiceParameters(dt::ServiceCategory energy_service_,
-                                                     dt::McsConnector mcs_connector_, dt::ControlMode control_mode_,
-                                                     dt::MobilityNeedsMode mobility_, dt::Pricing pricing_,
-                                                     dt::BptChannel channel_, dt::GeneratorMode generator_) :
-    selected_energy_service(energy_service_),
-    selected_control_mode(control_mode_),
-    selected_mobility_needs_mode(mobility_),
-    selected_pricing(pricing_),
-    selected_bpt_channel(channel_),
-    selected_generator_mode(generator_) {
-    selected_connector.emplace<dt::McsConnector>(mcs_connector_);
+    selected_connector = connector_;
 };
 
 Session::Session() {
