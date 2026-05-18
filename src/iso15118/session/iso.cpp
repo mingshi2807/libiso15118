@@ -3,12 +3,9 @@
 #include <iso15118/session/iso.hpp>
 
 #include <cassert>
-#include <chrono>
 #include <cstring>
-#include <thread>
 
 #include <endian.h>
-
 #include <iso15118/d20/state/supported_app_protocol.hpp>
 
 #include <iso15118/detail/helper.hpp>
@@ -42,23 +39,20 @@ static std::unique_ptr<message_20::Variant> make_variant_from_packet(const iso15
         packet.get_payload_type(), io::StreamInputView{packet.get_payload_buffer(), packet.get_payload_length()});
 }
 
-// Turn an SDP parsing error into a readable exception.
-void raise_invalid_packet_state(const io::SdpPacket& sdp_packet) {
+// Log an SDP parsing error and reset the packet so the caller discards it.
+static void log_invalid_packet_error(io::SdpPacket& sdp_packet) {
     using PacketState = io::SdpPacket::State;
-
-    auto error = std::string("Error while reading sdp packet: ");
     switch (sdp_packet.get_state()) {
     case PacketState::INVALID_HEADER:
-        error += "invalid sdp packet header";
+        logf_warning("Invalid SDP packet header received from vehicle");
         break;
     case PacketState::PAYLOAD_TO_LONG:
-        error += "packet too large for buffer";
+        logf_warning("SDP payload too large for buffer");
         break;
     default:
-        assert(false);
+        break;
     }
-
-    log_and_throw(error.c_str());
+    sdp_packet = {};
 }
 
 // NOTE (aw): this function return true, if it would block to read a complete packet
@@ -87,7 +81,8 @@ bool read_single_sdp_packet(io::IConnection& connection, io::SdpPacket& sdp_pack
 
     // packet not finished
     if (sdp_packet.get_state() != PacketState::HEADER_READ) {
-        raise_invalid_packet_state(sdp_packet);
+        log_invalid_packet_error(sdp_packet);
+        return false;
     }
 
     // header read successfully, try to read the rest
@@ -103,7 +98,8 @@ bool read_single_sdp_packet(io::IConnection& connection, io::SdpPacket& sdp_pack
 
     // assert finished packet
     if (sdp_packet.get_state() != PacketState::COMPLETE) {
-        raise_invalid_packet_state(sdp_packet);
+        log_invalid_packet_error(sdp_packet);
+        return false;
     }
 
     return false;
@@ -183,8 +179,9 @@ TimePoint const& Session::poll() {
         // stored temporarily here.
         // TODO(sl): Construct ControlEventCache Struct
 
-        [[maybe_unused]] const auto res = fsm.feed(d20::Event::CONTROL_MESSAGE);
-        // FIXME (aw): check result!
+        const auto control_res = fsm.feed(d20::Event::CONTROL_MESSAGE);
+        // Control events are cached in Context (e.g., cache_dynamic_mode_parameters)
+        // and picked up by the next state; unhandled is expected here.
     }
 
     const auto timeouts_reached = timeouts.check();
@@ -199,8 +196,11 @@ TimePoint const& Session::poll() {
                 break;
             } else {
                 ctx.set_active_timeout(timeout);
-
-                [[maybe_unused]] const auto res = fsm.feed(d20::Event::TIMEOUT);
+                const auto timeout_res = fsm.feed(d20::Event::TIMEOUT);
+                if (not timeout_res) {
+                    logf_error("Timeout was not handled by current state. Stopping the session");
+                    ctx.session_stopped = true;
+                }
                 timeouts.reset_timeout(timeout);
             }
         }
@@ -224,8 +224,12 @@ TimePoint const& Session::poll() {
 
         ctx.feedback.v2g_message(request_msg_type);
 
-        [[maybe_unused]] const auto res = fsm.feed(d20::Event::V2GTP_MESSAGE);
-        // FIXME(sl): check result!
+        const auto msg_res = fsm.feed(d20::Event::V2GTP_MESSAGE);
+        if (not msg_res) {
+            logf_error("V2GTP message was not handled by current state. Stopping the session");
+            ctx.session_stopped = true;
+            // Continue to check for pending response below.
+        }
     }
 
     const auto [got_response, payload_size, payload_type, response_type] = message_exchange.check_and_clear_response();
@@ -244,18 +248,27 @@ TimePoint const& Session::poll() {
     }
 
     if (ctx.session_stopped or ctx.session_paused) {
-        // TODO(SL): Does this also apply when a timeout is triggered? Or should the TCP/TLS connection be terminated
-        // directly?
-        // Wait for 5 seconds [V2G20-1643]
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-        connection->close();
+        if (not delayed_close_at.has_value()) {
+            // Schedule a non-blocking delayed close per [V2G20-1643].
+            delayed_close_at = offset_time_point_by_ms(now, 5000);
+        }
 
-        const auto signal =
-            (ctx.session_paused) ? session::feedback::Signal::DLINK_PAUSE : session::feedback::Signal::DLINK_TERMINATE;
-        ctx.feedback.signal(signal);
+        if (now >= *delayed_close_at) {
+            connection->close();
+            delayed_close_at = std::nullopt;
+            const auto signal =
+                (ctx.session_paused) ? session::feedback::Signal::DLINK_PAUSE : session::feedback::Signal::DLINK_TERMINATE;
+            ctx.feedback.signal(signal);
+            next_session_event = offset_time_point_by_ms(now, SESSION_IDLE_TIMEOUT_MS);
+            return next_session_event;
+        }
+
+        // Still waiting for the delayed-close window; tell the event loop
+        // to wake us up at the scheduled close time.
+        next_session_event = *delayed_close_at;
+        return next_session_event;
     }
 
-    // FIXME (aw): proper timeout handling!
     next_session_event = offset_time_point_by_ms(now, SESSION_IDLE_TIMEOUT_MS);
     return next_session_event;
 }

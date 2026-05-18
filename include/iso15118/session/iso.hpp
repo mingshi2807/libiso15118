@@ -72,6 +72,12 @@ private:
     d20::MessageExchange message_exchange{{response_buffer + io::SdpPacket::V2GTP_HEADER_SIZE,
                                            sizeof(response_buffer) - io::SdpPacket::V2GTP_HEADER_SIZE}};
 
+    // Non-blocking delayed close per [V2G20-1643].
+    // When session_stopped or session_paused is set, we record the wall-clock
+    // time of the trigger and defer the actual close + dlink signal by 5 seconds
+    // so the polling loop is not blocked.
+    std::optional<TimePoint> delayed_close_at{std::nullopt};
+
     // control event buffer
     d20::ControlEventQueue control_event_queue;
     std::optional<d20::ControlEvent> active_control_event{std::nullopt};
