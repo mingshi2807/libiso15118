@@ -1,5 +1,8 @@
 # Repository Guidelines
 
+> Visual architecture and sequence diagrams: **[docs/architecture.md](docs/architecture.md)**.
+> AC DER IEC control flow: **[docs/ac_der_secc_provider.md](docs/ac_der_secc_provider.md)**.
+
 ## Project Structure & Module Organization
 - `include/`: Public headers, with stable APIs under `include/iso15118`.
 - `src/`: Library implementation (C++), organized by protocol areas (e.g., `d20`, `io`, `message`, `session`).
