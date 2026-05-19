@@ -1,6 +1,62 @@
 # AC DER SECC Provider Integration
 
 `IAcDerControlProvider` is the SECC application-layer contract for ISO 15118-20 AMD1 AC_DER IEC control data.
+
+## Control Flow (AC DER IEC)
+
+```mermaid
+sequenceDiagram
+    participant EVCC as EV (EVCC)
+    participant SDP as SdpServer
+    participant Sess as Session::poll()
+    participant FSM as FSM / d20::State
+    participant Prov as IAcDerControlProvider
+    participant SECC as SECC Application
+
+    SDP->>Sess: SDP request to TCP/TLS handshake to SupportedAppProtocol
+
+    Sess->>FSM: SessionSetup to AuthorizationSetup to Authorization to ServiceDiscovery to ServiceDetail
+    FSM->>FSM: ServiceSelection (EVCC selects AC_DER)
+
+    Note over FSM: enters AC_ChargeParameterDiscovery
+
+    EVCC->>Sess: AC_ChargeParameterDiscoveryReq (DER_AC_ModeReq)
+    Sess->>FSM: feed(V2GTP_MESSAGE)
+    FSM->>Prov: get_ac_der_control_result(ctx)
+    Prov->>SECC: query DER policy (grid, DSO, EVSE capability)
+    SECC-->>Prov: AcDerControlConfig (cpd_control)
+    Prov-->>FSM: AcDerControlResult{config, failure_reason}
+    alt provider returns config
+        FSM->>FSM: populate DER_AC_ModeRes
+        FSM->>Sess: ctx.respond(AC_ChargeParameterDiscoveryRes)
+        Sess-->>EVCC: AC_ChargeParameterDiscoveryRes (DER_AC_ModeRes)
+        Note over FSM: transitions to ScheduleExchange or AC_ChargeLoop
+    else provider rejects (nullopt)
+        FSM->>FSM: response_code = FAILED_WrongChargeParameter
+        FSM->>Sess: ctx.respond(AC_ChargeParameterDiscoveryRes)
+        Sess-->>EVCC: AC_ChargeParameterDiscoveryRes (FAILED)
+        Note over FSM: session_stopped = true
+    end
+
+    opt ChargeLoop active
+        EVCC->>Sess: AC_ChargeLoopReq (DER_AC_ModeReq)
+        Sess->>FSM: feed(V2GTP_MESSAGE)
+        FSM->>Prov: get_ac_der_control_result(ctx)
+        Prov->>SECC: query DSO setpoints (Q, cos phi)
+        SECC-->>Prov: AcDerControlConfig (dso_q_setpoint, dso_cos_phi_setpoint)
+        Prov-->>FSM: AcDerControlResult
+        alt config available
+            FSM->>FSM: populate DER_AC_ModeRes with DSO control
+            FSM->>Sess: ctx.respond(AC_ChargeLoopRes)
+            Sess-->>EVCC: AC_ChargeLoopRes (DER_AC_CLResControlMode)
+        else config unavailable
+            FSM->>Sess: ctx.respond(AC_ChargeLoopRes with FAILED)
+            Note over FSM: session_stopped = true
+        end
+    end
+```
+
+## Overview
 The standards-to-code matrix is maintained in `docs/ac_der_iec_traceability.md`.
 The expert-review checklist is maintained in `docs/ac_der_iec_acceptance_pack.md`.
 
