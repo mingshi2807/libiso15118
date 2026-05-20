@@ -690,7 +690,7 @@ int iso15118_session_poll(iso15118_session_t* s) {
 
         s->poll_manager.poll(50);
 
-        auto& next = s->session->poll();
+        s->session->poll();
         if (s->session->is_finished()) {
             s->stopped = true;
             return -1;
