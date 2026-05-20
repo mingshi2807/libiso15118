@@ -100,6 +100,11 @@ endif()
 add_subdirectory(input)
 add_subdirectory(src)
 
+option(ISO15118_BUILD_C_API "Build C wrapper for FFI interop" ON)
+if(ISO15118_BUILD_C_API)
+    add_subdirectory(api/c)
+endif()
+
 if (ISO15118_BUILD_EXAMPLES)
     add_subdirectory(examples)
 endif()
