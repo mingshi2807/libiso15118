@@ -6,6 +6,7 @@
 #include <sstream>
 
 #include <iso15118/d20/state/ac_charge_parameter_discovery.hpp>
+#include <iso15118/d20/state/authorization.hpp>
 #include <iso15118/d20/state/authorization_setup.hpp>
 #include <iso15118/d20/state/dc_charge_parameter_discovery.hpp>
 #include <iso15118/d20/state/session_setup.hpp>
@@ -144,6 +145,19 @@ Result SessionSetup::feed(Event ev) {
 
             // TODO(sl): Error handling
             return {};
+        }
+
+        // When EIM is the only authorization service offered, skip
+        // AuthorizationSetup and go directly to Authorization.
+        bool eim_only = true;
+        for (auto& svc : m_ctx.session_config.authorization_services) {
+            if (svc != dt::Authorization::EIM) {
+                eim_only = false;
+                break;
+            }
+        }
+        if (eim_only) {
+            return m_ctx.create_state<Authorization>();
         }
         return m_ctx.create_state<AuthorizationSetup>();
 
