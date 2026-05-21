@@ -659,9 +659,9 @@ iso15118_session_t* iso15118_session_create(const char* config_json) {
     }
 
     // Parse optional interface field (default: "lo")
-    auto root = MiniJson::parse(config_json);
-    if (root && root->kind == JsonVal::Object) {
-        if (auto* iface = root->find("interface"))
+    auto iface_root = MiniJson::parse(config_json);
+    if (iface_root && iface_root->kind == JsonVal::Object) {
+        if (auto* iface = iface_root->find("interface"))
             s->interface = iface->str;
     }
 
@@ -687,6 +687,7 @@ int iso15118_session_poll(iso15118_session_t* s) {
         if (!s->session) {
             auto session_config = d20::SessionConfig(s->config);
 
+            fprintf(stderr, "[C_WRAPPER] Creating ConnectionPlain on %s\n", s->interface.c_str());
             auto conn = std::make_unique<io::ConnectionPlain>(s->poll_manager, s->interface); // TODO: configurable interface
 
             auto callbacks = make_callbacks(*s);
