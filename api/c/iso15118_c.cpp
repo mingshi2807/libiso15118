@@ -502,6 +502,7 @@ struct iso15118_session_t {
     void* event_userdata{nullptr};
 
     std::string session_id_str; // hex string of session ID
+    std::string interface{"lo"}; // network interface
     std::string last_error;
     std::mutex push_mutex;
 
@@ -657,6 +658,13 @@ iso15118_session_t* iso15118_session_create(const char* config_json) {
         return nullptr;
     }
 
+    // Parse optional interface field (default: "lo")
+    auto root = MiniJson::parse(config_json);
+    if (root && root->kind == JsonVal::Object) {
+        if (auto* iface = root->find("interface"))
+            s->interface = iface->str;
+    }
+
     s->session_id_str = "0000000000000000"; // will be updated after session creation
     return s.release();
 }
@@ -679,7 +687,7 @@ int iso15118_session_poll(iso15118_session_t* s) {
         if (!s->session) {
             auto session_config = d20::SessionConfig(s->config);
 
-            auto conn = std::make_unique<io::ConnectionPlain>(s->poll_manager, "eth0"); // TODO: configurable interface
+            auto conn = std::make_unique<io::ConnectionPlain>(s->poll_manager, s->interface); // TODO: configurable interface
 
             auto callbacks = make_callbacks(*s);
             std::optional<d20::PauseContext> pause_ctx{std::nullopt};
