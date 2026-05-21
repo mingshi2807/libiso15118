@@ -79,6 +79,9 @@ message_20::AuthorizationResponse handle_request(const message_20::Authorization
 
 void Authorization::enter() {
     m_ctx.log.enter_state("Authorization");
+    // Auto-accept EIM: set status = Accepted so the first AuthReq
+    // transitions directly to ServiceDiscovery.
+    authorization_status = AuthStatus::Accepted;
 }
 
 Result Authorization::feed(Event ev) {
