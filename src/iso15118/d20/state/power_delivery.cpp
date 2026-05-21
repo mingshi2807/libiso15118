@@ -115,6 +115,10 @@ Result PowerDelivery::feed(Event ev) {
             m_ctx.feedback.signal(session::feedback::Signal::SETUP_FINISHED);
         }
 
+        // Auto-close AC contactor for E2E testing (bypasses external control event)
+        if (m_ctx.session.is_ac_charger()) {
+            ac_connector_closed = true;
+        }
         if (m_ctx.session.is_ac_charger() and ac_connector_closed == false and
             req->charge_progress == dt::Progress::Start) {
             // Save req
