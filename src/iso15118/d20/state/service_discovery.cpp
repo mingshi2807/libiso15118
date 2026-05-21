@@ -121,6 +121,7 @@ handle_request(const message_20::ServiceDiscoveryRequest& req, d20::Session& ses
 }
 
 void ServiceDiscovery::enter() {
+    fprintf(stderr, "[SVC_DISC] Entered ServiceDiscovery state\n");
     m_ctx.log.enter_state("ServiceDiscovery");
 }
 
@@ -130,6 +131,7 @@ Result ServiceDiscovery::feed(Event ev) {
     }
 
     const auto variant = m_ctx.pull_request();
+    fprintf(stderr, "[SVC_DISC] Got variant type=%d\n", static_cast<int>(variant->get_type()));
 
     if (const auto req = variant->get_if<message_20::ServiceDiscoveryRequest>()) {
         if (req->supported_service_ids) {
@@ -151,6 +153,7 @@ Result ServiceDiscovery::feed(Event ev) {
         }
 
         return m_ctx.create_state<ServiceDetail>();
+    fprintf(stderr, "[SVC_DISC] Processing ServiceDiscoveryReq...\n");
     } else if (const auto req = variant->get_if<message_20::SessionStopRequest>()) {
         const auto res = handle_request(*req, m_ctx.session);
 
@@ -166,6 +169,7 @@ Result ServiceDiscovery::feed(Event ev) {
         send_sequence_error(req_type, m_ctx);
 
         m_ctx.session_stopped = true;
+        fprintf(stderr, "[SVC_DISC] Sequence error or session stop!\n");
         return {};
     }
 }
