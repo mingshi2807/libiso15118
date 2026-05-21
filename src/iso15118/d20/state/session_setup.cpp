@@ -157,9 +157,9 @@ Result SessionSetup::feed(Event ev) {
             }
         }
         if (eim_only) {
-            return m_ctx.create_state<Authorization>();
+            fprintf(stderr, "SESSION_SETUP_GOING_TO_AUTH\n"); return m_ctx.create_state<Authorization>();
         }
-        return m_ctx.create_state<AuthorizationSetup>();
+        fprintf(stderr, "SESSION_SETUP_GOING_TO_AUTHSETUP\n"); return m_ctx.create_state<AuthorizationSetup>();
 
     } else {
         m_ctx.log("expected SessionSetupReq! But code type id: %d", variant->get_type());
