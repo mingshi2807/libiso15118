@@ -132,8 +132,12 @@ Result Authorization::feed(Event ev) {
 
         // Auto-accept EIM when the handler returns Finished processing
         if (res.evse_processing == dt::Processing::Finished) {
+            fprintf(stderr, "[AUTH] Auto-accepting EIM, setting status=Accepted\n");
             authorization_status = AuthStatus::Accepted;
         }
+
+        fprintf(stderr, "[AUTH] authorization_status=%d, evse_processing=%d\n",
+                static_cast<int>(authorization_status), static_cast<int>(res.evse_processing));
 
         if (authorization_status == AuthStatus::Accepted) {
             authorization_status = AuthStatus::Pending; // reset
