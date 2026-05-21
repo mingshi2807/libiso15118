@@ -685,6 +685,11 @@ int iso15118_session_poll(iso15118_session_t* s) {
     try {
         // Lazy init: create session on first poll
         if (!s->session) {
+            // Set up a no-op session log callback to avoid std::bad_function_call
+            // from an uninitialized global callback in libiso15118.
+            iso15118::session::logging::set_session_log_callback(
+                [](std::size_t, const iso15118::session::logging::Event&) {});
+
             auto session_config = d20::SessionConfig(s->config);
 
             fprintf(stderr, "[C_WRAPPER] Creating ConnectionPlain on %s\n", s->interface.c_str());
