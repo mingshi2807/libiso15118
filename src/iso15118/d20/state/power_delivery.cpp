@@ -111,6 +111,17 @@ Result PowerDelivery::feed(Event ev) {
 
         return {};
     } else if (const auto req = variant->get_if<message_20::PowerDeliveryRequest>()) {
+        if (req->charge_progress == dt::Progress::Stop) {
+            // EV requests to stop charging — transition to SessionStop
+            const auto& res = handle_request(*req, m_ctx.session, false);
+            m_ctx.respond(res);
+            if (res.response_code >= dt::ResponseCode::FAILED) {
+                m_ctx.session_stopped = true;
+                return {};
+            }
+            return m_ctx.create_state<SessionStop>();
+        }
+
         if (req->charge_progress == dt::Progress::Start) {
             m_ctx.feedback.signal(session::feedback::Signal::SETUP_FINISHED);
         }

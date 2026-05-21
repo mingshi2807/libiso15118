@@ -9,6 +9,7 @@
 #include <iso15118/detail/d20/context_helper.hpp>
 #include <iso15118/detail/d20/state/ac_charge_loop.hpp>
 #include <iso15118/detail/d20/state/power_delivery.hpp>
+#include <iso15118/detail/d20/state/session_stop.hpp>
 #include <iso15118/detail/helper.hpp>
 
 namespace iso15118::d20::state {
@@ -414,6 +415,11 @@ Result AC_ChargeLoop::feed(Event ev) {
             m_ctx.feedback.ac_charge_loop_req(*req->display_parameters);
         }
 
+        return {};
+    } else if (const auto req = variant->get_if<message_20::SessionStopRequest>()) {
+        const auto res = handle_request(*req, m_ctx.session);
+        m_ctx.respond(res);
+        m_ctx.session_stopped = true;
         return {};
     } else {
         m_ctx.log("Expected PowerDeliveryReq or AC_ChargeLoopRequest! But code type id: %d", variant->get_type());
