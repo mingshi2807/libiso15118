@@ -207,6 +207,7 @@ handle_request(const message_20::AC_ChargeParameterDiscoveryRequest& req, const 
 }
 
 void AC_ChargeParameterDiscovery::enter() {
+    fprintf(stderr, "[AC_CPD] Entered\n");
     m_ctx.log.enter_state("AC_ChargeParameterDiscovery");
     present_powers = m_ctx.cache_ac_present_power.value_or(AcPresentPower{});
 }
@@ -225,8 +226,10 @@ Result AC_ChargeParameterDiscovery::feed(Event ev) {
     }
 
     const auto variant = m_ctx.pull_request();
+    fprintf(stderr, "[AC_CPD] Got variant type=%d\n", static_cast<int>(variant->get_type()));
 
     if (const auto req = variant->get_if<message_20::AC_ChargeParameterDiscoveryRequest>()) {
+        fprintf(stderr, "[AC_CPD] Processing AC CPD request\n");
 
         if (const auto* mode = std::get_if<AC_ModeReq>(&req->transfer_mode)) {
             // Set EV transfer limits
