@@ -703,6 +703,11 @@ int iso15118_session_poll(iso15118_session_t* s) {
 
             s->session =
                 std::make_unique<iso15118::Session>(std::move(conn), std::move(session_config), callbacks, pause_ctx);
+
+            // Pre-accept EIM authorization so the FSM transitions past
+            // Authorization without needing an external control event.
+            d20::AuthorizationResponse auth_event{true};
+            s->session->push_control_event(d20::ControlEvent{auth_event});
         }
 
         s->poll_manager.poll(50);
