@@ -1,4 +1,5 @@
 *build
+*build_prod
 .vscode
 /pki
 test/sample_data
