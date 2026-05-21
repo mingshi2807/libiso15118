@@ -625,6 +625,24 @@ iso15118::session::feedback::Callbacks make_callbacks(iso15118_session_t& s) {
 
     // Other callbacks (dc_charge_loop_req, ac_charge_loop_req, etc.)
     // are stubbed for now — extend as needed for full coverage.
+    // Stub all remaining callbacks that are not yet fully wired.
+    // Without these, the FSM throws std::bad_function_call when it invokes
+    // an empty std::function<> callback member.
+    cb.dc_pre_charge_target_voltage = [](float) {};
+    cb.dc_charge_loop_req = [](const auto&) {};
+    cb.dc_max_limits = [](const auto&) {};
+    cb.ac_charge_loop_req = [](const auto&) {};
+    cb.selected_protocol = [](const std::string&) {};
+    cb.notify_ev_charging_needs = [](const auto&, const auto&, const auto&, const auto&,
+                                     const auto&, const auto&, const auto&, const auto&) {};
+    cb.ev_information = [](const auto&) {};
+    cb.get_vas_parameters = [](uint16_t) -> std::optional<dt::ServiceParameterList> {
+        return std::nullopt;
+    };
+    cb.selected_vas_services = [](const auto&) {};
+    cb.ac_limits = [](const auto&) {};
+    cb.ac_der_control_diagnostic = [](const auto&) {};
+
     cb.ev_termination = [&s](const std::string& code, const std::string& msg) {
         JsonBuf b;
         b.start_obj();
