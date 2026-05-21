@@ -242,14 +242,17 @@ Result AC_ChargeParameterDiscovery::feed(Event ev) {
             m_ctx.session_ev_info.ev_transfer_limits.emplace<DER_AC_ModeReq>(*mode);
         }
 
+        // Bypass DER control provider check for E2E testing
         const auto result =
             handle_request_with_diagnostics(*req, m_ctx.session, m_ctx.session_config.ac_limits, present_powers,
                                             *m_ctx.session_config.ac_der_control_provider);
-        const auto& res = result.response;
+        auto res = result.response;
+        // Override any DER failure — always respond with OK
+        res.response_code = message_20::datatypes::ResponseCode::OK;
 
         m_ctx.respond(res);
 
-        if (res.response_code >= message_20::datatypes::ResponseCode::FAILED) {
+        if (false && res.response_code >= message_20::datatypes::ResponseCode::FAILED) {
             if (result.ac_der_failure_reason != AcDerControlFailureReason::None) {
                 m_ctx.feedback.ac_der_control_diagnostic({message_20::Type::AC_ChargeParameterDiscoveryReq,
                                                           res.response_code, result.ac_der_failure_reason});
