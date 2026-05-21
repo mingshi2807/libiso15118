@@ -111,8 +111,8 @@ Result PowerDelivery::feed(Event ev) {
 
         return {};
     } else if (const auto req = variant->get_if<message_20::PowerDeliveryRequest>()) {
-        if (req->charge_progress == dt::Progress::Stop) {
-            // EV requests to stop charging — transition to SessionStop
+        // If contactor already closed (second PowerDeliveryReq), treat as Stop.
+        if (ac_connector_closed) {
             const auto& res = handle_request(*req, m_ctx.session, false);
             m_ctx.respond(res);
             if (res.response_code >= dt::ResponseCode::FAILED) {
