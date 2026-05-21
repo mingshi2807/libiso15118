@@ -149,7 +149,8 @@ handle_request_with_diagnostics(const message_20::AC_ChargeParameterDiscoveryReq
         convert(mode, limits, powers);
 
     } else if (std::holds_alternative<DER_AC_ModeReq>(req.transfer_mode)) {
-        if (selected_energy_service != message_20::datatypes::ServiceCategory::AC_DER) {
+        if (selected_energy_service != message_20::datatypes::ServiceCategory::AC_DER &&
+            selected_energy_service != message_20::datatypes::ServiceCategory::AC_BPT) {
             return failed_ac_der_result(res, message_20::datatypes::ResponseCode::FAILED_WrongChargeParameter,
                                         AcDerControlFailureReason::NonAcDerServiceSelected);
         }
