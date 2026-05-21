@@ -108,6 +108,7 @@ message_20::ScheduleExchangeResponse handle_request(const message_20::ScheduleEx
 }
 
 void ScheduleExchange::enter() {
+    fprintf(stderr, "[SCHED_EX] Entered\n");
     m_ctx.log.enter_state("ScheduleExchange");
 }
 
@@ -137,6 +138,7 @@ Result ScheduleExchange::feed(Event ev) {
     }
 
     const auto variant = m_ctx.pull_request();
+    fprintf(stderr, "[SCHED_EX] Got variant type=%d\n", static_cast<int>(variant->get_type()));
 
     if (const auto req = variant->get_if<message_20::ScheduleExchangeRequest>()) {
 
