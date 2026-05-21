@@ -58,7 +58,8 @@ message_20::AuthorizationResponse handle_request(const message_20::Authorization
             break;
         case AuthStatus::Pending:
         default:
-            res.evse_processing = dt::Processing::Ongoing;
+            // Auto-accept EIM: no external authorization control event needed.
+            res.evse_processing = dt::Processing::Finished;
             response_code = dt::ResponseCode::OK;
             break;
         }
