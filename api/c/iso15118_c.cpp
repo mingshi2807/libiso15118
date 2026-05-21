@@ -688,9 +688,12 @@ int iso15118_session_poll(iso15118_session_t* s) {
             auto session_config = d20::SessionConfig(s->config);
 
             fprintf(stderr, "[C_WRAPPER] Creating ConnectionPlain on %s\n", s->interface.c_str());
-            auto conn = std::make_unique<io::ConnectionPlain>(s->poll_manager, s->interface); // TODO: configurable interface
+            auto conn = std::make_unique<io::ConnectionPlain>(s->poll_manager, s->interface);
+            fprintf(stderr, "[C_WRAPPER] ConnectionPlain created\n"); // TODO: configurable interface
 
+            fprintf(stderr, "[C_WRAPPER] Building callbacks...\n");
             auto callbacks = make_callbacks(*s);
+            fprintf(stderr, "[C_WRAPPER] Callbacks built\n");
             std::optional<d20::PauseContext> pause_ctx{std::nullopt};
 
             s->session =
@@ -708,6 +711,7 @@ int iso15118_session_poll(iso15118_session_t* s) {
         // Return approximate wakeup delay
         return 50;
     } catch (const std::exception& e) {
+        fprintf(stderr, "[C_WRAPPER] EXCEPTION in poll: %s\n", e.what());
         std::snprintf(g_last_error, sizeof(g_last_error), "Poll error: %s", e.what());
         s->stopped = true;
         return -1;
