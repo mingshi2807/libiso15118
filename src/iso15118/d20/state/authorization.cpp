@@ -130,6 +130,11 @@ Result Authorization::feed(Event ev) {
             return {};
         }
 
+        // Auto-accept EIM when the handler returns Finished processing
+        if (res.evse_processing == dt::Processing::Finished) {
+            authorization_status = AuthStatus::Accepted;
+        }
+
         if (authorization_status == AuthStatus::Accepted) {
             authorization_status = AuthStatus::Pending; // reset
             m_ctx.stop_timeout(d20::TimeoutType::ONGOING);
